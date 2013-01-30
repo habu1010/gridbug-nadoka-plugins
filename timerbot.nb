@@ -1,0 +1,45 @@
+# -*- coding: euc-jp -*-
+# -*- ruby -*-
+=begin
+
+This plugin is test version.
+
+=end
+
+require 'thread'
+require 'kconv'
+
+class TimerBot < Nadoka::NDK_Bot
+  def on_privmsg prefix, ch, msg
+    msg = msg.toeuc.gsub(/　/e,'  ')
+    if /\Atimer[>\s]\s*(\w+)\s*(.+)?/ =~ msg
+      msg = $2
+      if $1 =~ /^(\d+)([smh])$/
+        sec = $1.to_i
+        case $2
+        when "h"
+          sec *= 3600
+        when "m"
+          sec *= 60
+        when "s"
+        else
+          sec = 0
+        end
+
+        if sec > 0
+          Thread.start(sec, prefix.nick, msg) {|s, nick, m|
+            send_notice(ch, "#{nick}: タイマーをスタートしました".tojis);
+            sleep s
+            if m.nil?
+              send_notice(ch, "#{nick}: #{s}秒経過".tojis);
+            else
+              send_notice(ch, "#{nick}: #{m}".tojis);
+            end
+          }
+        end
+      end
+    end
+  end
+end
+
+

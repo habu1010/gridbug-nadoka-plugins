@@ -1,0 +1,122 @@
+# -*-ruby-*-
+#
+# Copyright (c) 2004-2006 SASADA Koichi <ko1 at atdot.net>
+#
+# This program is free software with ABSOLUTELY NO WARRANTY.
+# You can re-distribute and/or modify this program under
+# the same terms of the Ruby's lisence.
+#
+
+=begin
+
+== Abstract
+
+Answer weather information using "Livedoor Weather Web Service / LWWS".
+
+LWWS: http://weather.livedoor.com/weather_hacks/webservice.html
+
+
+== Usage
+
+  tenki> [CITY] 
+  tenki:[today|tomorrow|dayaftertomorrow]> [CITY]
+
+  [CITY] should be city name in Kanji listed on following table.
+  http://weather.livedoor.com/forecast/rss/forecastmap.xml
+
+  If timing is not specified, show today's information.
+
+
+== Configuration
+
+BotConfig = [
+{
+  :name => :TenkiBot,
+  :ch   => /nadoka/,  # default: /.*/
+}
+]
+
+
+=end
+
+require 'open-uri'
+require 'pp'
+require 'kconv'
+require 'net/http'
+require 'rss/2.0'
+
+Net::HTTP.version_1_2
+
+class MyTenkiBot < Nadoka::NDK_Bot
+
+  @@WeatherHacksAddress = 'weather.livedoor.com'
+  @@ForecastMapLocation = '/forecast/rss/forecastmap.xml'
+
+  def bot_initialize
+    @available_channel = @bot_config[:ch] || /.*/
+    @CityIDs = {}
+
+    get_forecastmap
+  end
+
+  def get_forecastmap
+    Net::HTTP.start(@@WeatherHacksAddress) {|http|
+      response = http.get(@@ForecastMapLocation)
+
+      if Net::HTTPOK === response
+        response.body.each_line {|line|
+          if /city title="(.+?)" id="(\d+)" source="http:\/\/weather.livedoor.com(.+?)"/ =~ line
+            @CityIDs[$1.toeuc] = $3
+          end
+        }
+      end
+    }
+  end
+
+  def tenki location
+    retval = []
+    Net::HTTP.start(@@WeatherHacksAddress) {|http|
+      response = http.get(location)
+
+      if Net::HTTPOK === response
+        rss = RSS::Parser.parse(response.body, false)
+        retval = rss.items.select {|i|
+          /の天気は/u =~ i.description
+        }.collect {|i| [i.description, i.link]}
+      end
+    }
+
+    return retval
+  end
+
+  def on_privmsg prefix, ch, msg
+    if @available_channel === ch
+      if /\Atenki(|:(.+?))[>\s](.+?)\s*(\d)?\s*$/ =~ msg
+        city = $3.strip.toeuc
+        timing = ($2 || 'today').strip
+        days = $4.nil? ? 1 : $4.to_i
+
+        get_forecastmap if @CityIDs.empty?
+        if @CityIDs.empty?
+          send_notice(ch, "情報の取得に失敗しました。時間をおいて再度試してください。".tojis)
+          return
+        end
+
+        begin
+          result = tenki(@CityIDs.fetch(city))
+          days = result.size if days > result.size
+          days.times {|i|
+            send_notice ch, "#{result[i][1]}" if i == 0 #URL表示
+            send_notice ch, "#{result[i][0].tojis}"
+          }
+        rescue IndexError
+          result = "#{city.tojis} is unknown city.  Check http://weather.livedoor.com/weather_hacks/rss_feed_list.html"
+          send_notice ch, "tenki bot: #{result}" 
+        rescue => e
+          result = "#{e}"
+          send_notice ch, "tenki bot: #{result}" 
+        end
+      end
+    end
+  end
+end

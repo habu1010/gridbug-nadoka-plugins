@@ -1,0 +1,46 @@
+# -*- ruby -*-
+=begin
+
+This plugin is test version.
+
+=end
+
+class CalcBot < Nadoka::NDK_Bot
+  @@FUNCS = 'acos|asin|atan|atan2|acosh|asinh|atanh|cos|sin|tan|cosh|sinh|tanh|erf|erfc|exp|frexp|hypot|ldexp|log|log10|sqrt|E|PI'
+  @@DICE = '\d*d\d+'
+  def bot_initialize
+    @available_channel = @bot_config[:ch] || /.*/
+  end
+  
+  def expectation(dice)
+    if /^(\d*)d(\d+)$/ =~ dice
+      dice = $1.empty? ? 1 : $1.to_i
+      side = $2.to_i
+      dice * (side + 1) / 2.0
+    end
+  end
+
+  def on_privmsg prefix, ch, msg
+    msg = msg.toeuc
+    if /\Acalc[>\s]\s*(.+)\s*/ =~ msg
+      exp = $1
+      begin
+        if /^([\s\d+\-*\/().]|#{@@FUNCS}|#{@@DICE})+$/ =~ exp
+          # ダイスの部分を期待値に置き変え
+          exp2 = exp.gsub(/#{@@DICE}/) {|m| expectation(m)}
+          # 数学関数をMath::func()に置き変えてeval
+          result = eval exp2.gsub(/(#{@@FUNCS})/, "Math::\\1")
+          if result.to_s.size > 200
+            send_notice(ch, "計算結果が長すぎます".tojis)
+          else
+            send_notice(ch, "#{exp} = #{result.to_s}")
+          end
+        end
+      rescue Exception => e
+        send_notice(ch, e.message.split("\n")[0])
+      end
+    end
+  end
+end
+
+

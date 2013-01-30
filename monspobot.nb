@@ -1,0 +1,139 @@
+# -*- coding: euc-jp -*-
+# -*-ruby-*-
+#
+# Copyright (c) 2004-2005 SASADA Koichi <ko1 at atdot.net>
+#
+# This program is free software with ABSOLUTELY NO WARRANTY.
+# You can re-distribute and/or modify this program under
+# the same terms of the Ruby's lisence.
+#
+#
+# $Id: samplebot.nb 130 2005-05-26 12:04:08Z ko1 $
+#
+
+# bot_file_name and BotClassName must be same name
+# (BotClassName.downcase == bot_file_name)
+
+class MonspoBot < Nadoka::NDK_Bot
+
+  class MonData
+    def initialize(spo_file, cut_lines = 0)
+      @table = []
+      @SPO_FILE = spo_file
+      @cut_lines = cut_lines
+      File.open(@SPO_FILE) {|f|
+        f.inject([["", 0], ["", 0]]){|prev, line|
+          if /^===/ =~ line
+            str = ""
+            pos = 0
+            if !prev[0][0].strip.empty?
+              str << prev[0][0].rstrip << prev[1][0]
+              pos = prev[0][1]
+            else
+              str << prev[1][0]
+              pos = prev[1][1]
+            end
+            m = str.match(/^(?:\[.\])?\s*(?:(.+)\/)?(.+?)\s*\(.+\)$/)
+            @table << {:name=>m[1], :ename=>m[2], :namepos=>pos, :recallpos=>f.pos}
+          end
+
+          [prev[1], [line, f.pos - line.length]]
+
+        }
+      }
+    end
+
+    def select_data(key)
+      return @table.collect{|i| [i[:name], i[:ename]]}.flatten.grep(/#{key}/ie)
+    end
+
+    def find_data(key)
+      return @table.find {|i| /#{key}/ie =~ i[:name] || /#{key}/ie =~ i[:ename] }
+    end
+
+    def get_data(key)
+      result = ""
+      mon = find_data(key)
+      File.open(@SPO_FILE) {|f|
+        f.pos = mon[:namepos]
+        result << f.gets
+        if /^===/ !~ (ret = f.gets)
+          result.rstrip! << " " << ret << f.gets
+        else
+          result << ret
+        end
+      }
+      return result
+    end
+
+    def get_recall(key)
+      mon = find_data(key)
+
+      recall_lines = ""
+      File.open(@SPO_FILE) {|f|
+        f.pos = mon[:recallpos]
+        @cut_lines.times{|i| f.gets}#名前行と簡易データ行などを読み捨て
+        f.each {|line|
+          break if line =~ /^$/
+          recall_lines << line.chop
+        }
+      }
+
+      lastpos = 0; pos = 0
+      while pos = recall_lines.index(/([。、]|\D[,.])/e, pos)
+        pos += 2
+        if (pos-lastpos) > 200
+          lastpos = pos
+          recall_lines.insert(pos, "\n")
+        end
+      end
+
+      return recall_lines
+    end
+  end
+
+  def bot_initialize
+    @mondata = {}
+    @mondata["h"] = MonData.new(File.expand_path(File.dirname(__FILE__) + '/band-data/heng-mon-info.spo'))
+    @mondata["x"] = MonData.new(File.expand_path(File.dirname(__FILE__) + '/band-data/xang-mon-info.spo'))
+    @kouho = []
+  end
+
+  def on_privmsg prefix, ch, msg
+    msg = msg.toeuc
+    if /\Amon([x]?)(:v)?[>\s]\s*(.+)\s*/ie =~ msg
+      mondata = $1.empty? ? @mondata["h"] : @mondata[$1]
+      verbose = $2
+      key = $3
+
+      # key が数値の場合候補からの選択を試みる
+      if key =~ /^\d+$/ && key.to_i > 0 && @kouho[key.to_i - 1]
+        key = "^#{@kouho[key.to_i - 1]}$"
+      end
+
+      # 合致するモンスターを検索
+      mondata_array = mondata.select_data(key)
+      case
+      when mondata_array.size > 10
+        send_notice(ch, "#{key}: 候補の数が多すぎます(#{mondata_array.size})".tojis)
+      when mondata_array.size > 1
+        @kouho = mondata_array
+        idx = 0
+        send_notice(ch, mondata_array.collect{|i| idx+=1; "(#{idx})#{i}"}.join(" ").tojis)
+      when mondata_array.empty?
+        send_notice(ch, "#{key}: 見つかりません".tojis)
+      else
+        # Hit: 情報表示
+        mondata.get_data(key).each{|i|
+          send_notice(ch, i.rstrip.tojis)
+        }
+        if (verbose)
+          mondata.get_recall(key).each{|i|
+            send_notice("#{prefix.nick}", i.rstrip.tojis)
+          }
+        end
+      end
+    end
+  end
+
+end

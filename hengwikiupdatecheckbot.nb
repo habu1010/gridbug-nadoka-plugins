@@ -1,0 +1,53 @@
+# -*- coding: iso-2022-jp -*-
+## -*-ruby-*- vim: set filetype=ruby :
+# -*- coding: iso-2022-jp -*-
+
+require 'date'
+require 'net/http'
+require 'nokogiri'
+require 'kconv'
+require File.expand_path(File.dirname(__FILE__) + '/googleurlshortener.rb')
+
+class HengWikiUpdateCheckBot < Nadoka::NDK_Bot
+
+  def bot_initialize
+    @next_check_time = Time.now
+    @last_updated = DateTime.now
+    @shortener = GoogleURLShortener.new
+  end
+
+  def on_timer t
+    if (t >= @next_check_time)
+      @next_check_time = t + 5 * 60
+      check
+    end
+  end
+
+  def check
+    req = Net::HTTP::Get.new("/wiki/index.php?RecentChanges")
+
+    response = nil
+    Net::HTTP.start('hengband.sourceforge.jp', 80) {|http|
+      response = http.request(req)
+    }
+
+    doc = Nokogiri::HTML(response.body)
+
+    newest_updated = @last_updated
+
+    doc.xpath('//ul[@class = "list1"]/li').each do |node|
+      time_str = node.children.first.content.gsub(/\(.+\)/, "") + "JST"
+      time = DateTime.strptime(time_str, "%Y-%m-%d  %H:%M:%S - %Z")
+
+      if time > @last_updated
+        link = node.xpath('a').first
+        url = @shortener.shorten_url(link["href"])
+        content = link.content.tojis
+        send_notice('#ぐりっどばぐ', "Wiki update: #{content} #{url}")
+        newest_updated = time if time > newest_updated
+      end
+    end
+
+    @last_updated = newest_updated
+  end
+end

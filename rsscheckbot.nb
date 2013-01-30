@@ -1,0 +1,104 @@
+# -*- coding: iso-2022-jp -*-
+# -*-ruby-*- vim: set filetype=ruby :
+
+require 'json'
+require 'net/http'
+require 'feedparser'
+require 'kconv'
+require File.expand_path(File.dirname(__FILE__) + '/googleurlshortener.rb')
+
+class RSSChecker
+  RECORD_DIR = "#{ENV["HOME"]}/.rss_checker"
+
+  attr_reader :name
+  #attr_accessor :record
+
+  def initialize(name, url)
+    @name = name
+
+    uri = URI.parse(url)
+    @http = Net::HTTP.new(uri.host)
+    @request = Net::HTTP::Get.new("#{uri.path}?#{uri.query}")
+    @record_file = RECORD_DIR + "/" + name
+
+    begin
+      File.open(@record_file) do |f|
+        @record = JSON.parse(f.read)
+      end
+    rescue
+      # 'File not found?'
+      FileUtils.mkdir(RECORD_DIR) unless FileTest.exist?(RECORD_DIR)
+      @record = {"If-Modified-Since" => "", "lastPubDate" => Time.now.to_i}
+    end
+  end
+
+  def get_new_items
+    @request["If-Modified-Since"] = @record["If-Modified-Since"]
+
+    response = @http.start do |session|
+      session.request(@request)
+    end
+
+    new_items = parse_response(response)
+    update_record(response, new_items.first.date.to_i) unless new_items.empty?
+    return new_items
+  end
+
+  private
+  def parse_response(response)
+    return [] unless Net::HTTPOK === response
+
+    feed = FeedParser::Feed.new(response.body)
+    return feed.items.select {|i| i.date.to_i > @record["lastPubDate"]}
+  end
+
+  private
+  def update_record(response, last_pubdate)
+    @record["If-Modified-Since"] = response["last-modified"].strip unless response["last-modified"].nil?
+    @record["lastPubDate"] = last_pubdate
+    File.open(@record_file, "w") {|f|
+      f.write @record.to_json
+    }
+  end
+end
+
+if __FILE__ == $0
+  a = RSSChecker.new('hoge', "http://search.twitter.com/search.atom?q=%23hengband")
+  #a = RSSChecker.new('hoge', "http://sourceforge.jp/forum/rss.php?group_id=541&forum_id=30152")
+  #a = RSSChecker.new('hoge', "http://sourceforge.jp/projects/hengband/scm/svn/rss")
+  #a = RSSChecker.new('hoge', "http://www.kmc.gr.jp/~habu/local/hengscore/html/newcome-rss.xml")
+
+  a.record["lastPubDate"] = 0
+  puts a.get_new_items[0].title
+  exit
+end
+
+class RSSCheckBot < Nadoka::NDK_Bot
+  def bot_initialize
+    @next_check_time = Time.now
+
+    @rss_checker_list = @bot_config[:rss_list].map {|i| RSSChecker.new(i[:name], i[:url])}
+    @google_url_shortener = GoogleURLShortener.new
+  end
+
+  def on_timer t
+    if (t >= @next_check_time)
+      @next_check_time = t + 5 * 60
+      check
+    end
+  end
+
+  def check
+    @rss_checker_list.each do |i|
+      new_items = i.get_new_items
+      notice(i.name, new_items)
+    end
+  end
+
+  def notice(rss_name, items)
+    items.each do |i|
+      short_url = @google_url_shortener.shorten_url(i.link)
+      send_notice('#ぐりっどばぐ', "#{rss_name}: #{i.title} #{short_url}".tojis)
+    end
+  end
+end

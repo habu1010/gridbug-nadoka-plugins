@@ -1,0 +1,31 @@
+## -*-ruby-*- vim: set filetype=ruby :
+
+require 'kconv'
+
+class RollBot < Nadoka::NDK_Bot
+  @@MAX_DICE = 100
+
+  def on_privmsg prefix, ch, msg
+    if /\Aroll[>\s]\s*(\d*)d(\d+)\s*/ =~ msg
+      if $1.empty?
+        dice = 1
+      else
+        dice = $1.to_i
+      end
+      side = $2.to_i
+      return if side == 0
+      if (dice > @@MAX_DICE)
+        send_notice(ch, "#{prefix.nick}: 自分で振れやハゲ".tojis)
+        return
+      end
+      dice_array = []
+      dice.times {
+        dice_array << (rand(side) + 1)
+      }
+      sum = dice_array.inject(0) { |r, i| r+i }
+      result_seq = dice_array.join(",")
+      send_notice(ch, "#{prefix.nick}: #{dice}d#{side}[#{result_seq}]=#{sum}")
+    end
+  end
+
+end

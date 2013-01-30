@@ -1,0 +1,108 @@
+# -*- coding: euc-jp -*-
+# -*-ruby-*-
+#
+# Copyright (c) 2004-2005 SASADA Koichi <ko1 at atdot.net>
+#
+# This program is free software with ABSOLUTELY NO WARRANTY.
+# You can re-distribute and/or modify this program under
+# the same terms of the Ruby's lisence.
+#
+#
+# $Id: samplebot.nb 130 2005-05-26 12:04:08Z ko1 $
+#
+
+# bot_file_name and BotClassName must be same name
+# (BotClassName.downcase == bot_file_name)
+
+class NoteBot < Nadoka::NDK_Bot
+  @@NOTE_FILE = "/work/gridbug-up/note.txt"
+
+  def bot_initialize
+    @note_hash = {}
+    @note = File.readlines(@@NOTE_FILE)
+    build_hash(@note)
+  end
+
+  def build_hash(note)
+    @note_hash.clear
+    note.each{|line|
+      if /^(.+) :#: (.+)$/ =~ line
+        @note_hash[$1] = [] if !@note_hash[$1]
+        @note_hash[$1] << $2
+      end
+    }
+  end
+
+  def memorize(string)
+    if /^\s*(.+)\s+(?:とは|is)\s+(.+)\s*$/ =~ string
+      key, value = $1, $2
+      File.open(@@NOTE_FILE, "a") {|f|
+        f.puts(key + " :#: " + value)
+      }
+      @note << (key + " :#: " + value)
+      build_hash(@note)
+      return key
+    end
+    return nil
+  end
+
+  def forget(key)
+    unless @note_hash[key]
+      return "#{key}: 覚えていません"
+    end
+
+    File.open(@@NOTE_FILE, "w") {|f|
+      @note.each {|line|
+        f.puts line.gsub(/^(#{key}) :#: /, "/*/*/*\\1/*/*/*")
+      }
+    }
+    @note = File.readlines(@@NOTE_FILE)
+    build_hash(@note)
+
+    return "#{key} を忘れました"
+  end
+
+  def sort
+    sorted_keys = @note_hash.keys.sort
+    File.open(@@NOTE_FILE, "w") {|f|
+      sorted_keys.each {|key|
+        @note_hash[key].each{ |str|
+          f.puts key + " :#: " + str
+        }
+      }
+    }
+
+    @note = File.readlines(@@NOTE_FILE)
+    build_hash(@note)
+  end
+
+  # Yes person
+  def on_privmsg prefix, ch, msg
+    msg = msg.toeuc
+    if "note:sort" == msg
+      sort
+      send_notice(ch, "ソートしました".tojis)
+    end
+
+    if /^(?:note|ばぐ)(?::(record|memorize|erase|forget))?[,>、\s]\s*(.*)\s*$/ie =~ msg
+      opt = $1
+      key = $2
+      case $1
+      when "record", "memorize"
+        if ret = memorize(key)
+          send_notice(ch, "#{ret} を覚えました".tojis)
+        end
+      when "forget", "erase"
+        send_notice(ch, forget(key).tojis)
+      else
+        if @note_hash[key]
+          @note_hash[key].each{|i|
+            send_notice(ch, "#{key} とは…#{i}".tojis)
+          }
+        else
+          send_notice(ch, "#{key} とは何ですか？".tojis)
+        end
+      end
+    end
+  end
+end

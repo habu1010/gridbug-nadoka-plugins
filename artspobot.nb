@@ -1,0 +1,426 @@
+# -*- coding: euc-jp -*-
+
+require 'kconv'
+require 'stringio'
+require 'singleton'
+
+class ArtspoBot < Nadoka::NDK_Bot
+  #BOT初期化
+  def bot_initialize
+    #データベースからアーティファクトデータを読み込み
+    @spoiler = {}
+    @spoiler["h"] = ArtifactSpoiler.new(@bot_config[:heng_info_dir] + "/a_info.txt", @bot_config[:heng_info_dir] + "/k_info.txt")
+    @spoiler["x"] = ArtifactSpoiler.new(@bot_config[:xang_info_dir] + "/a_info.txt", @bot_config[:xang_info_dir] + "/k_info.txt")
+    @candidates = []
+    @search_key = :full_name
+    # @flag_kinds = @@INFO_ARRAY.collect{|i| i[0]}.concat([:bonus])
+  end
+
+  def on_privmsg prefix, ch, msg
+    msg = msg.toeuc
+    if /\Aart([x]?)(flag|:f)?[>\s]\s*(.+)\s*/e =~ msg
+      variant = $1.length > 0 ? $1 : "h"
+      spoiler = @spoiler[variant]
+      key = $2 ? $2 : :full_name
+      search_str = $3
+
+      if spoiler.info_file_updated?
+        @candidates.clear
+        spoiler.read_artifact_info
+        send_notice(ch, "Artifact information has been updated.")
+      end
+
+      # search_str が数値の場合候補から選択
+      if search_str =~ /^\d+$/ && @candidates[search_str.to_i - 1]
+        hits = [@candidates[search_str.to_i - 1]]
+      else
+        hits, @search_key = spoiler.search(search_str)
+      end
+
+      result = create_message(search_str, hits)
+
+      # 長すぎる場合は二行に分ける
+      pos = 0
+      while pos = result.index(';', pos)
+        pos += 1
+        if pos > 200
+          result[pos] = "\n"
+          break
+        end
+      end
+
+      #検索結果を表示
+      result.each {|i|
+        send_notice(ch, i.rstrip.tojis)
+      }
+    end
+  end
+
+  def create_message(search_string, candidates)
+    #複数ヒット
+    case
+    when candidates.size > 10
+      return "#{search_string}: 候補の数が多すぎます(#{candidates.size})"
+
+    when candidates.size > 1
+      # 該当が2〜10個の時は候補を表示
+      @candidates = candidates
+      idx = 0
+      return candidates.collect{|i| idx+=1; "(#{idx})#{i[@search_key]}"}.join(" ")
+
+    when candidates.size == 1
+      return candidates[0].to_s @search_key
+
+    else
+      return "#{search_string}: 見つかりません"
+
+    end
+  end
+
+end
+
+class ArtifactFlagInfo
+  @@flag_info = nil
+  @@type_array = nil
+
+  def ArtifactFlagInfo.flag_info
+    ArtifactFlagInfo.initialize if @@flag_info.nil?
+    return @@flag_info
+  end
+  def ArtifactFlagInfo.type_array
+    ArtifactFlagInfo.initialize if @@type_array.nil?
+    return @@type_array
+  end
+
+  private
+  def ArtifactFlagInfo.initialize
+    @@type_array = []  # フラグのタイプ('res' 'power'等)を示す文字列の配列
+
+    # フラグをキーとしてフラグのタイプ、表示順序、表示名を示すハッシュ (ex. 'RES_ACID' => ['res', 0, '酸'])
+    @@flag_info = Hash.new
+    order = 0
+
+    flagtype_file = File.expand_path(File.dirname(__FILE__) + '/band-data/flagtype.txt')
+    open(flagtype_file) { |f|
+      typename = nil # 現在処理中のフラグタイプ
+      f.each { |line|
+        case line
+        when /^==TYPE:(.+)$/
+          typename = $1.to_sym
+          @@type_array << typename
+          order = 0
+        when /^([^#\s].+):(.+)$/
+          @@flag_info[$1.to_sym] = {:type => typename, :order => order, :desc => $2}
+          order += 1
+        end
+      }
+    }
+  end
+end
+
+class ArtifactActivateInfo < Hash
+  include Singleton
+
+  def initialize
+    activate_desc_source = File.expand_path(File.dirname(__FILE__) + '/band-data/object1.c')
+    open(activate_desc_source) do |file|
+      key = nil
+      file.each do |line|
+        case line
+        when /case\s+ACT_(\w+):/
+          activate_kind = $1.to_sym
+          key = activate_kind if self[activate_kind].nil?
+        when /return\s+"(.*)";/
+          self[key] = $1 unless key.nil?
+        else
+          key = nil
+        end
+      end
+    end
+  end
+end
+
+class Artifact < Hash
+  @@INFO_ARRAY = [
+                  [:slay, "スレイ: "],
+                  [:brand, "属性: "],
+                  [:immun, "免疫: "],
+                  [:res, "耐性: "],
+                  [:esp, "ESP: "],
+                  [:sustain, "維持: "],
+                  [:power, ""],
+                  [:misc, ""],
+                  [:curse, ""],
+                  [:generate, "追加: "],
+                 ]
+
+  def to_s(search_key)
+    s = StringIO.new
+
+    if (search_key == :full_name_en)
+      s.printf("%s (★%s)", self[:full_name_en], self[:full_name])
+    else
+      s.printf("★%s", self[:full_name])
+    end
+
+    output_data(s)
+
+    return s.string
+  end
+
+  def is_melee_weapon
+    return (self[:tval] >= 20 && self[:tval] <= 23)
+  end
+
+  def is_range_weapon
+    return self[:tval] == 19
+  end
+
+  def is_armor
+    return (self[:tval] >= 36 && self[:tval] <= 38)
+  end
+
+  def is_protective_equipment
+    return (self[:tval] >= 30 && self[:tval] <= 38)
+  end
+
+  # 弓の倍率表示
+  private
+  def get_mult (sval, bonus)
+    mult = sval % 10
+    mult += 1 if (bonus && (bonus.include?(:MIGHT) || bonus.include?(:XTRA_MIGHT)))
+    return mult
+  end
+
+  # 殺戮修正の表示
+  private
+  def put_toHit_toDam (s)
+    to_dam, to_hit = self[:to_dam], self[:to_hit]
+    return if (to_dam.nil? || to_hit.nil?)
+    if (to_dam != 0 || to_hit != 0 || is_melee_weapon)
+      s.printf(" (%+d", to_hit)
+      if (!is_armor || to_dam != 0)
+        s.printf(",%+d", to_dam)
+      end
+      s.print ")"
+    end
+  end
+
+  # AC修正の表示
+  private
+  def put_ac(s)
+    ac, toAc = self[:ac], self[:to_ac]
+    if (is_protective_equipment)
+      s.printf(" [%d,%+d]", ac, toAc)
+    elsif ((ac && ac > 0) || (toAc && toAc != 0))
+      s.printf(" [%s%+d]", ((ac && ac > 0) ? ac.to_s + "," : ""), toAc)
+    end
+  end
+
+  private
+  def output_data (s)
+    if is_melee_weapon
+      s.printf(" (%s)", self[:dice])
+    elsif is_range_weapon
+      s.printf(" (x%d)", get_mult(self[:sval], self[:bonus]))
+    end
+
+    put_toHit_toDam(s)
+    put_ac(s)
+    s.print "; "
+
+    #修正
+    if bonuses = self[:bonus]
+      s.printf("%+d %s", self[:pval], output_aux(bonuses))
+    end
+
+    #フラグ
+    @@INFO_ARRAY.each { |i|
+      if self[i[0]]
+        s.printf("%s%s", i[1], output_aux(self[i[0]]))
+      end
+    }
+
+    #発動
+    unless self[:activate].nil?
+      s.printf("発動: %s; ", ArtifactActivateInfo.instance[self[:activate]]);
+    end
+
+    s.printf("階 %d, 希少度 %d, %.1f kg, $%d", self[:depth], self[:rarity], self[:weight] / 20.0, self[:value])
+  end
+
+  # 耐性、スレイ、能力などの表示
+  private
+  def output_aux (value)
+    flag_info = ArtifactFlagInfo.flag_info
+    retval = value.collect{|i|
+      flag_info[i][:desc]
+    }.join(", ") + "; "
+    return retval
+  end
+end
+
+class ArtifactSpoiler
+
+  def initialize(a_info_file, k_info_file)
+    @artifact_info = []
+
+    @a_info_file = a_info_file
+    @k_info_file = k_info_file
+
+    read_artifact_info
+  end
+
+  def info_file_updated?
+    return (File.stat(@a_info_file).mtime > @a_info_file_mtime ||
+            File.stat(@k_info_file).mtime > @k_info_file_mtime)
+  end
+
+  def search(regexp)
+    search_key = :full_name
+    result = @artifact_info.select{|i|
+      if (i[:full_name] =~ /#{regexp}/ie)
+        true
+      elsif (i[:full_name_en] =~ /#{regexp}/i)
+        search_key = :full_name_en
+        true
+      end
+    }
+
+    return result, search_key
+  end
+
+  def read_artifact_info
+    @artifact_info.clear
+
+    item_names = ArtifactSpoiler.read_k_info(@k_info_file)
+    init_a_info(@a_info_file, item_names)
+    @a_info_file_mtime = File.stat(@a_info_file).mtime
+    @k_info_file_mtime = File.stat(@k_info_file).mtime
+  end
+
+  #アイテムの種類を読み込む
+  # { ["tval", "sval"] => ["日本語名", "英語名"] } という連想配列が得られる
+  private
+  def self.read_k_info(k_info_file)
+    item_names = {}
+    open(k_info_file, "r") { |f|
+      name, ename = "", ""
+      f.each { |line|
+        case line
+        when /^N:(\d+):([^:]+)(:.+)?$/  #日本語名
+          name = $2.gsub(/& /,'').chomp
+        when /^[EJ]:([^:]+)(:.+)?$/        #英語名
+          ename = $1.gsub(/(& |~)/,'').chomp
+        when /^I:(\d+):(\d+):\d+$/
+          item_names[[$1, $2]] = [name, ename]
+          name, ename = "", ""
+        end
+      }
+    }
+    return item_names
+  end
+
+  #アーティファクトのデータを読み込む
+  private
+  def init_a_info(a_info_file, item_names)
+    flag_info = ArtifactFlagInfo.flag_info
+    open(a_info_file, "r") { |f|
+      cur_art = nil
+      f.each { |line|
+        case line
+        when /^N:(\d+):(.+)$/
+          num, name = $1.to_i, $2
+          cur_art = Artifact.new
+          cur_art[:name] = name.gsub(/& /,'')
+          @artifact_info[num] = cur_art
+        when /^E:(.+)$/
+          cur_art[:name_en] = $1.gsub(/(& |~)/,'')
+        when /^J:N:(.+)$/
+          cur_art[:name_en] = $1.gsub(/(& |~)/,'')
+          cur_art[:name], cur_art[:name_en] = cur_art[:name_en], cur_art[:name]
+        when /^I:(\d+):(\d+):([+-]?\d+)$/
+          tval, sval, pval = $1, $2, $3
+          cur_art[:name_en] = cur_art[:name] if !cur_art[:name_en]
+          cur_art[:tval] = tval.to_i
+          cur_art[:sval] = sval.to_i
+          cur_art[:pval] = pval.to_i
+          cur_art[:full_name] =
+            if cur_art[:name] =~ /^『/
+              item_names[[tval, sval]][0] + cur_art[:name]
+            else
+              cur_art[:name] + item_names[[tval, sval]][0]
+            end
+          if cur_art[:name] =~ /^\$/
+            cur_art[:name] = cur_art[:name].sub(/^\$/, '')
+            cur_art[:full_name] = cur_art[:name]
+          end
+          cur_art[:full_name_en] =
+            "The " + item_names[[tval, sval]][1] + " " + cur_art[:name_en]
+          if cur_art[:name_en] =~ /^\$/
+            cur_art[:name_en] = cur_art[:name_en].sub(/^\$/, '')
+            cur_art[:full_name_en] = cur_art[:name_en]
+          end
+        when /^W:(\d+):(\d+):(\d+):(\d+)$/
+          cur_art[:depth] = $1.to_i
+          cur_art[:rarity] = $2.to_i
+          cur_art[:weight] = $3.to_i
+          cur_art[:value] = $4.to_i
+        when /^P:(\d+):(\d+)d(\d+):([+-]?\d+):([+-]?\d+):([+-]?\d+)$/
+          cur_art[:ac] = $1.to_i
+          cur_art[:dice] = "#{$2}d#{$3}"
+          #cur_art[:dam2] = $2.to_i * ($3.to_i + 1)
+          cur_art[:to_hit] = $4.to_i
+          cur_art[:to_dam] = $5.to_i
+          cur_art[:to_ac] = $6.to_i
+        when /^U:(.+)$/
+          cur_art[:activate] = $1.to_sym
+        when /^F:(.*)$/
+          $1.split('|').each { |flag|
+            flag.strip!
+            next if flag.empty? #空文字列
+
+            flagsym = flag.to_sym # 'RES_ACID' => :RES_ACID
+            info = flag_info[flagsym]
+
+            if (info.nil?)
+              # flagtype.txtに無いフラグ
+              puts "Unknown flag '" + flag + "'"
+              next
+            end
+
+            # 空文字列もしくは無視するフラグなら次へ
+            next if (info[:type] == :ignore)
+
+            type = info[:type]
+            if cur_art[type].nil?
+              cur_art[type] = [flagsym]
+            else
+              cur_art[type] << flagsym
+            end
+          }
+          # ※特殊 FULL_NAME フラグがあったら常にフル名称表示
+          if cur_art[:full_name_flag]
+            cur_art[:full_name] = cur_art[:name]
+            cur_art[:full_name_en] = cur_art[:name_en]
+          end
+        end
+      }
+    }
+
+    # アーティファクト番号を元に配列を作っているので空きを切り詰める
+    @artifact_info.compact!
+
+    # フラグの順番をソート
+    @artifact_info.each{ |i|
+      ArtifactFlagInfo.type_array.each{ |j|
+        if ! i[j].nil?
+          i[j].sort!{|a, b|
+            flag_info[a][:order] - flag_info[b][:order]
+          }
+        end
+      }
+    }
+  end
+
+end

@@ -122,16 +122,28 @@ class ArtifactActivateInfo < Hash
   include Singleton
 
   def initialize
-    activate_desc_source = File.expand_path(File.dirname(__FILE__) + '/band-data/object1.c')
+    activate_desc_source = File.expand_path(File.dirname(__FILE__) + '/band-data/tables.c')
     open(activate_desc_source) do |file|
-      key = nil
+      key, constant, dice = nil, nil, nil
       file.each do |line|
         case line
-        when /case\s+ACT_(\w+):/
-          activate_kind = $1.to_sym
-          key = activate_kind if self[activate_kind].nil?
-        when /return\s+"(.*)";/
-          self[key] = $1 unless key.nil?
+        when /"(\w+)"\s*,.*,.*,.*,\s*\{\s*(\d+)\s*,\s*(\d+)\s*\}/
+          if self[$1.to_sym].nil?
+            key, constant, dice = $1.to_sym, $2.to_i, $3.to_i
+          end
+        when /_\("(.*)",\s*"(.*)"\)/
+          unless key.nil?
+            self[key] = $1 + " : "
+            if constant == 0 && dice == 0
+              self[key] += "いつでも"
+            elsif constant < 0
+              self[key] += "特殊"
+            else
+              self[key] += constant.to_s
+              self[key] += "+d#{dice}" if dice > 0
+              self[key] += " ターン毎"
+            end
+          end
         else
           key = nil
         end

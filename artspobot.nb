@@ -169,6 +169,8 @@ class Artifact < Hash
   def to_s(search_key)
     s = StringIO.new
 
+    s.printf("[%d] ", self[:id])
+
     if (search_key == :full_name_en)
       s.printf("%s (¡ú%s)", self[:full_name_en], self[:full_name])
     else
@@ -345,6 +347,7 @@ class ArtifactSpoiler
           num, name = $1.to_i, $2
           cur_art = Artifact.new
           cur_art[:name] = name.gsub(/& /,'')
+          cur_art[:id] = num
           @artifact_info[num] = cur_art
         when /^E:(.+)$/
           cur_art[:name_en] = $1.gsub(/(& |~)/,'')

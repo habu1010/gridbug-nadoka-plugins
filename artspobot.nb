@@ -13,12 +13,10 @@ class ArtspoBot < Nadoka::NDK_Bot
     @spoiler["x"] = ArtifactSpoiler.new(@bot_config[:xang_info_dir] + "/a_info.txt", @bot_config[:xang_info_dir] + "/k_info.txt")
     @candidates = []
     @search_key = :full_name
-    # @flag_kinds = @@INFO_ARRAY.collect{|i| i[0]}.concat([:bonus])
   end
 
   def on_privmsg prefix, ch, msg
-    msg = msg.toeuc
-    if /\Aart([x]?)(flag|:f)?[>\s]\s*(.+)\s*/e =~ msg
+    if /\Aart([x]?)(flag|:f)?[>\s]\s*(.+)\s*/e =~ msg.toeuc
       variant = $1.length > 0 ? $1 : "h"
       spoiler = @spoiler[variant]
       key = $2 ? $2 : :full_name
@@ -40,39 +38,31 @@ class ArtspoBot < Nadoka::NDK_Bot
       result = create_message(search_str, hits)
 
       # 長すぎる場合は二行に分ける
-      pos = 0
-      while pos = result.index(';', pos)
-        pos += 1
-        if pos > 200
-          result[pos] = "\n"
-          break
-        end
-      end
+      pos = result.index('; ', 200)
+      result[pos + 1] = "\n" unless pos.nil?
 
-      #検索結果を表示
-      result.each {|i|
-        send_notice(ch, i.rstrip.tojis)
-      }
+      # 検索結果を表示
+      result.each { |i| send_notice(ch, i.rstrip.tojis) }
     end
   end
 
   def create_message(search_string, candidates)
-    #複数ヒット
     case
     when candidates.size > 10
-      return "#{search_string}: 候補の数が多すぎます(#{candidates.size})"
+      "#{search_string}: 候補の数が多すぎます(#{candidates.size})"
 
     when candidates.size > 1
       # 該当が2〜10個の時は候補を表示
       @candidates = candidates
-      idx = 0
-      return candidates.collect{|i| idx+=1; "(#{idx})#{i[@search_key]}"}.join(" ")
+      candidates.each_with_index.collect { |art, idx|
+        "(#{idx + 1})#{art[@search_key]}"
+      }.join(" ")
 
     when candidates.size == 1
-      return candidates[0].to_s @search_key
+      candidates[0].to_s @search_key
 
     else
-      return "#{search_string}: 見つかりません"
+      "#{search_string}: 見つかりません"
 
     end
   end
@@ -153,18 +143,18 @@ class ArtifactActivateInfo < Hash
 end
 
 class Artifact < Hash
-  @@INFO_ARRAY = [
-                  [:slay, "スレイ: "],
-                  [:brand, "属性: "],
-                  [:immun, "免疫: "],
-                  [:res, "耐性: "],
-                  [:esp, "ESP: "],
-                  [:sustain, "維持: "],
-                  [:power, ""],
-                  [:misc, ""],
-                  [:curse, ""],
-                  [:generate, "追加: "],
-                 ]
+  INFO_ARRAY = [
+                [:slay, "スレイ: "],
+                [:brand, "属性: "],
+                [:immun, "免疫: "],
+                [:res, "耐性: "],
+                [:esp, "ESP: "],
+                [:sustain, "維持: "],
+                [:power, ""],
+                [:misc, ""],
+                [:curse, ""],
+                [:generate, "追加: "],
+               ]
 
   def to_s(search_key)
     s = StringIO.new
@@ -183,19 +173,19 @@ class Artifact < Hash
   end
 
   def is_melee_weapon
-    return (self[:tval] >= 20 && self[:tval] <= 23)
+    self[:tval] >= 20 && self[:tval] <= 23
   end
 
   def is_range_weapon
-    return self[:tval] == 19
+    self[:tval] == 19
   end
 
   def is_armor
-    return (self[:tval] >= 36 && self[:tval] <= 38)
+    self[:tval] >= 36 && self[:tval] <= 38
   end
 
   def is_protective_equipment
-    return (self[:tval] >= 30 && self[:tval] <= 38)
+    self[:tval] >= 30 && self[:tval] <= 38
   end
 
   # 弓の倍率表示
@@ -223,11 +213,12 @@ class Artifact < Hash
   # AC修正の表示
   private
   def put_ac(s)
-    ac, toAc = self[:ac], self[:to_ac]
-    if (is_protective_equipment)
+    ac = self.fetch(:ac, 0)
+    toAc = self.fetch(:to_ac, 0)
+    if is_protective_equipment
       s.printf(" [%d,%+d]", ac, toAc)
-    elsif ((ac && ac > 0) || (toAc && toAc != 0))
-      s.printf(" [%s%+d]", ((ac && ac > 0) ? ac.to_s + "," : ""), toAc)
+    elsif ac > 0 || toAc != 0
+      s.printf(" [%s%+d]", ((ac > 0) ? ac.to_s + "," : ""), toAc)
     end
   end
 
@@ -244,21 +235,15 @@ class Artifact < Hash
     s.print "; "
 
     #修正
-    if bonuses = self[:bonus]
-      s.printf("%+d %s", self[:pval], output_aux(bonuses))
-    end
+    s.printf("%+d %s", self[:pval], output_aux(self[:bonus])) if self[:bonus]
 
     #フラグ
-    @@INFO_ARRAY.each { |i|
-      if self[i[0]]
-        s.printf("%s%s", i[1], output_aux(self[i[0]]))
-      end
-    }
+    INFO_ARRAY.each do |i|
+      s.printf("%s%s", i[1], output_aux(self[i[0]])) if self[i[0]]
+    end
 
     #発動
-    unless self[:activate].nil?
-      s.printf("発動: %s; ", ArtifactActivateInfo.instance[self[:activate]]);
-    end
+    s.printf("発動: %s; ", ArtifactActivateInfo.instance[self[:activate]]) if self[:activate]
 
     s.printf("階 %d, 希少度 %d, %.1f kg, $%d", self[:depth], self[:rarity], self[:weight] / 20.0, self[:value])
   end
@@ -266,11 +251,9 @@ class Artifact < Hash
   # 耐性、スレイ、能力などの表示
   private
   def output_aux (value)
-    flag_info = ArtifactFlagInfo.flag_info
-    retval = value.collect{|i|
-      flag_info[i][:desc]
+    value.collect { |i|
+      ArtifactFlagInfo.flag_info[i][:desc]
     }.join(", ") + "; "
-    return retval
   end
 end
 
@@ -291,17 +274,10 @@ class ArtifactSpoiler
   end
 
   def search(regexp)
-    search_key = :full_name
-    result = @artifact_info.select{|i|
-      if (i[:full_name] =~ /#{regexp}/ie)
-        true
-      elsif (i[:full_name_en] =~ /#{regexp}/i)
-        search_key = :full_name_en
-        true
-      end
-    }
+    result_jp = @artifact_info.select {|i| i[:full_name] =~ /#{regexp}/ie}
+    result_en = @artifact_info.select {|i| i[:full_name_en] =~ /#{regexp}/i}
 
-    return result, search_key
+    return result_jp + result_en, result_en.empty? ? :full_name : :full_name_en
   end
 
   def read_artifact_info
@@ -356,7 +332,7 @@ class ArtifactSpoiler
           cur_art[:name], cur_art[:name_en] = cur_art[:name_en], cur_art[:name]
         when /^I:(\d+):(\d+):([+-]?\d+)$/
           tval, sval, pval = $1, $2, $3
-          cur_art[:name_en] = cur_art[:name] if !cur_art[:name_en]
+          cur_art[:name_en] ||= cur_art[:name]
           cur_art[:tval] = tval.to_i
           cur_art[:sval] = sval.to_i
           cur_art[:pval] = pval.to_i
@@ -384,36 +360,27 @@ class ArtifactSpoiler
         when /^P:(\d+):(\d+)d(\d+):([+-]?\d+):([+-]?\d+):([+-]?\d+)$/
           cur_art[:ac] = $1.to_i
           cur_art[:dice] = "#{$2}d#{$3}"
-          #cur_art[:dam2] = $2.to_i * ($3.to_i + 1)
           cur_art[:to_hit] = $4.to_i
           cur_art[:to_dam] = $5.to_i
           cur_art[:to_ac] = $6.to_i
         when /^U:(.+)$/
           cur_art[:activate] = $1.to_sym
         when /^F:(.*)$/
-          $1.split('|').each { |flag|
-            flag.strip!
-            next if flag.empty? #空文字列
+          $1.split('|').
+            map {|i| i.strip}.reject {|i| i.empty?}.
+            map {|i| i.to_sym}.
+            reject {|i| flag_info[i].nil? || flag_info[i][:type] == :ignore}.
+            each do |i|
 
-            flagsym = flag.to_sym # 'RES_ACID' => :RES_ACID
-            info = flag_info[flagsym]
-
-            if (info.nil?)
-              # flagtype.txtに無いフラグ
-              puts "Unknown flag '" + flag + "'"
-              next
-            end
-
-            # 空文字列もしくは無視するフラグなら次へ
-            next if (info[:type] == :ignore)
-
-            type = info[:type]
+            type = flag_info[i][:type]
             if cur_art[type].nil?
-              cur_art[type] = [flagsym]
+              cur_art[type] = [i]
             else
-              cur_art[type] << flagsym
+              cur_art[type] << i
             end
-          }
+
+          end
+
           # ※特殊 FULL_NAME フラグがあったら常にフル名称表示
           if cur_art[:full_name_flag]
             cur_art[:full_name] = cur_art[:name]
@@ -427,15 +394,13 @@ class ArtifactSpoiler
     @artifact_info.compact!
 
     # フラグの順番をソート
-    @artifact_info.each{ |i|
-      ArtifactFlagInfo.type_array.each{ |j|
-        if ! i[j].nil?
-          i[j].sort!{|a, b|
-            flag_info[a][:order] - flag_info[b][:order]
-          }
+    @artifact_info.each do |i|
+      ArtifactFlagInfo.type_array.each do |j|
+        unless i[j].nil?
+          i[j].sort! { |a, b| flag_info[a][:order] - flag_info[b][:order] }
         end
-      }
-    }
+      end
+    end
   end
 
 end

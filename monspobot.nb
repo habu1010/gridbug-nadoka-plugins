@@ -14,123 +14,117 @@
 # bot_file_name and BotClassName must be same name
 # (BotClassName.downcase == bot_file_name)
 
-class MonspoBot < Nadoka::NDK_Bot
-
-  class MonData
-    def initialize(spo_file, cut_lines = 0)
-      @table = []
-      @SPO_FILE = spo_file
-      @cut_lines = cut_lines
-      File.open(@SPO_FILE) {|f|
-        f.inject([["", 0], ["", 0]]){|prev, line|
-          if /^===/ =~ line
-            str = ""
-            pos = 0
-            if !prev[0][0].strip.empty?
-              str << prev[0][0].rstrip << prev[1][0]
-              pos = prev[0][1]
-            else
-              str << prev[1][0]
-              pos = prev[1][1]
-            end
-            m = str.match(/^(?:\[.\])?\s*(?:(.+)\/)?(.+?)\s*\(.+\)$/)
-            @table << {:name=>m[1], :ename=>m[2], :namepos=>pos, :recallpos=>f.pos}
-          end
-
-          [prev[1], [line, f.pos - line.length]]
-
-        }
-      }
-    end
-
-    def select_data(key)
-      return @table.collect{|i| [i[:name], i[:ename]]}.flatten.grep(/#{key}/ie)
-    end
-
-    def find_data(key)
-      return @table.find {|i| /#{key}/ie =~ i[:name] || /#{key}/ie =~ i[:ename] }
-    end
-
-    def get_data(key)
-      result = ""
-      mon = find_data(key)
-      File.open(@SPO_FILE) {|f|
-        f.pos = mon[:namepos]
-        result << f.gets
-        if /^===/ !~ (ret = f.gets)
-          result.rstrip! << " " << ret << f.gets
-        else
-          result << ret
+class MonsterSpoiler
+  def initialize(spo_file)
+    @table = []
+    @SPO_FILE = spo_file
+    File.open(@SPO_FILE) do |f|
+      name_lines = []
+      f.each_line do |line|
+        if line.strip.empty?
+          name_lines.clear
+          next
         end
-      }
-      return result
-    end
 
-    def get_recall(key)
-      mon = find_data(key)
-
-      recall_lines = ""
-      File.open(@SPO_FILE) {|f|
-        f.pos = mon[:recallpos]
-        @cut_lines.times{|i| f.gets}#名前行と簡易データ行などを読み捨て
-        f.each {|line|
-          break if line =~ /^$/
-          recall_lines << line.chop
-        }
-      }
-
-      lastpos = 0; pos = 0
-      while pos = recall_lines.index(/([。、]|\D[,.])/e, pos)
-        pos += 2
-        if (pos-lastpos) > 200
-          lastpos = pos
-          recall_lines.insert(pos, "\n")
+        if /^===/ =~ line
+          recallpos = f.pos
+          namepos = recallpos - line.size - name_lines.map {|i| i.size}.inject(:+)
+          name_line = name_lines.map {|i| i.strip}.join(" ")
+          m = name_line.match(/^(?:\[.\])?\s*(?:(.+)\/)?(.+?)\s*\(.+\)$/)
+          @table << {
+            :num => @table.size,
+            :name => m[1],
+            :ename => m[2],
+            :namepos => namepos,
+            :recallpos => recallpos,
+          }
         end
+        name_lines << line
       end
-
-      return recall_lines
     end
   end
 
+  def select_data(search_key)
+    [:name, :ename].inject([]) do |sum, symbol|
+      sum + @table.select { |i| /#{search_key}/ie =~ i[symbol] }. map do |i|
+        { :name => i[symbol], :num => i[:num] }
+      end
+    end
+  end
+
+  def get_data(num)
+    File.open(@SPO_FILE) {|f|
+      mon = @table[num]
+      f.pos = mon[:namepos]
+      name_length = mon[:recallpos] - mon[:namepos]
+      f.read(name_length)
+    }.map { |i| i.chomp }.join(" ")
+  end
+
+  def get_recall(num)
+    recall_lines = File.open(@SPO_FILE) {|f|
+      f.pos = @table[num][:recallpos]
+      f.take_while { |line| !line.strip.empty? }
+    }.map { |i| i.chomp }.join("")
+
+    lastpos = 0; pos = 200
+    while pos = recall_lines.index(/([。、]|\D[,.])/e, pos)
+      pos += 2
+      recall_lines.insert(pos, "\n")
+      lastpos = pos
+      pos += 200
+    end
+
+    return recall_lines
+  end
+end
+
+class MonspoBot < Nadoka::NDK_Bot
+
   def bot_initialize
-    @mondata = {}
-    @mondata["h"] = MonData.new(File.expand_path(File.dirname(__FILE__) + '/band-data/heng-mon-info.spo'))
-    @mondata["x"] = MonData.new(File.expand_path(File.dirname(__FILE__) + '/band-data/xang-mon-info.spo'))
-    @kouho = []
+    @spoiler = {}
+    @spoiler["h"] = MonsterSpoiler.new(File.expand_path(File.dirname(__FILE__) + '/band-data/heng-mon-info.spo'))
+    @spoiler["x"] = MonsterSpoiler.new(File.expand_path(File.dirname(__FILE__) + '/band-data/xang-mon-info.spo'))
+    @candidates = []
   end
 
   def on_privmsg prefix, ch, msg
     msg = msg.toeuc
     if /\Amon([x]?)(:v)?[>\s]\s*(.+)\s*/ie =~ msg
-      mondata = $1.empty? ? @mondata["h"] : @mondata[$1]
+      spoiler = $1.empty? ? @spoiler["h"] : @spoiler[$1]
       verbose = $2
       key = $3
 
       # key が数値の場合候補からの選択を試みる
-      if key =~ /^\d+$/ && key.to_i > 0 && @kouho[key.to_i - 1]
-        key = "^#{@kouho[key.to_i - 1]}$"
+      if key =~ /^\d+$/
+        idx = key.to_i - 1 
+        candidates = [@candidates[idx]] if @candidates[idx]
       end
 
       # 合致するモンスターを検索
-      mondata_array = mondata.select_data(key)
+      candidates ||= spoiler.select_data(key)
+
       case
-      when mondata_array.size > 10
-        send_notice(ch, "#{key}: 候補の数が多すぎます(#{mondata_array.size})".tojis)
-      when mondata_array.size > 1
-        @kouho = mondata_array
-        idx = 0
-        send_notice(ch, mondata_array.collect{|i| idx+=1; "(#{idx})#{i}"}.join(" ").tojis)
-      when mondata_array.empty?
+      when candidates.size > 10
+        send_notice(ch, "#{key}: 候補の数が多すぎます(#{candidates.size})".tojis)
+      when candidates.size > 1
+        @candidates = candidates
+        message = candidates.each_with_index.map { |mon, idx|
+          "(#{idx + 1})#{mon[:name]}"
+        }.join(" ")
+        send_notice(ch, message.tojis)
+      when candidates.empty?
         send_notice(ch, "#{key}: 見つかりません".tojis)
       else
         # Hit: 情報表示
-        mondata.get_data(key).each{|i|
+        mon = candidates.first
+        spoiler.get_data(mon[:num]).each do |i|
           send_notice(ch, i.rstrip.tojis)
-        }
+        end
         if (verbose)
-          mondata.get_recall(key).each{|i|
+          spoiler.get_recall(mon[:num]).each do |i|
             send_notice("#{prefix.nick}", i.rstrip.tojis)
-          }
+          end
         end
       end
     end

@@ -1,34 +1,22 @@
-# -*- coding: euc-jp -*-
-# -*-ruby-*-
-#
-# Copyright (c) 2004-2005 SASADA Koichi <ko1 at atdot.net>
-#
-# This program is free software with ABSOLUTELY NO WARRANTY.
-# You can re-distribute and/or modify this program under
-# the same terms of the Ruby's lisence.
-#
-#
-# $Id: samplebot.nb 130 2005-05-26 12:04:08Z ko1 $
-#
-
-# bot_file_name and BotClassName must be same name
-# (BotClassName.downcase == bot_file_name)
+# -*-ruby; coding: utf-8 -*- vim:set ft=ruby:
 
 class MonsterSpoiler
   def initialize(spo_file)
     @table = []
     @SPO_FILE = spo_file
     File.open(@SPO_FILE) do |f|
+      namepos = nil
       name_lines = []
       f.each_line do |line|
+        line = line.toutf8
         if line.strip.empty?
           name_lines.clear
+          namepos = f.pos
           next
         end
 
         if /^===/ =~ line
           recallpos = f.pos
-          namepos = recallpos - line.size - name_lines.map {|i| i.size}.inject(:+)
           name_line = name_lines.map {|i| i.strip}.join(" ")
           m = name_line.match(/^(?:\[.\])?\s*(?:(.+)\/)?(.+?)\s*\(.+\)$/)
           @table << {
@@ -46,7 +34,7 @@ class MonsterSpoiler
 
   def select_data(search_key)
     [:name, :ename].inject([]) do |sum, symbol|
-      sum + @table.select { |i| /#{search_key}/ie =~ i[symbol] }. map do |i|
+      sum + @table.select { |i| /#{search_key}/i =~ i[symbol] }. map do |i|
         { :name => i[symbol], :num => i[:num] }
       end
     end
@@ -57,22 +45,25 @@ class MonsterSpoiler
       mon = @table[num]
       f.pos = mon[:namepos]
       name_length = mon[:recallpos] - mon[:namepos]
-      f.read(name_length)
-    }.map { |i| i.chomp }.join(" ")
+      f.read(name_length).toutf8
+    }.gsub("\n", ' ')
+#.map { |i| i.chomp }.join(" ")
   end
 
   def get_recall(num)
     recall_lines = File.open(@SPO_FILE) {|f|
       f.pos = @table[num][:recallpos]
-      f.take_while { |line| !line.strip.empty? }
-    }.map { |i| i.chomp }.join("")
+      f.take_while { |line| !line.toutf8.strip.empty? }
+    }.map { |i| i.toutf8.chomp }.join("")
 
-    lastpos = 0; pos = 200
-    while pos = recall_lines.index(/([¡£¡¢]|\D[,.])/e, pos)
-      pos += 2
-      recall_lines.insert(pos, "\n")
-      lastpos = pos
-      pos += 200
+    lastpos = 0; pos = 0
+    while pos = recall_lines.index(/([ã€‚ã€]|\D[,.])/, pos)
+      pos += 1
+      if recall_lines[lastpos..pos].tojis.size > 350
+        recall_lines.insert(pos, "\n")
+        pos += 1
+        lastpos = pos
+      end
     end
 
     return recall_lines
@@ -89,24 +80,23 @@ class MonspoBot < Nadoka::NDK_Bot
   end
 
   def on_privmsg prefix, ch, msg
-    msg = msg.toeuc
-    if /\Amon([x]?)(:v)?[>\s]\s*(.+)\s*/ie =~ msg
+    if /\Amon([x]?)(:v)?[>\s]\s*(.+)\s*/i =~ msg.toutf8
       spoiler = $1.empty? ? @spoiler["h"] : @spoiler[$1]
       verbose = $2
       key = $3
 
-      # key ¤¬¿ôÃÍ¤Î¾ì¹ç¸õÊä¤«¤é¤ÎÁªÂò¤ò»î¤ß¤ë
+      # key ãŒæ•°å€¤ã®å ´åˆå€™è£œã‹ã‚‰ã®é¸æŠžã‚’è©¦ã¿ã‚‹
       if key =~ /^\d+$/
         idx = key.to_i - 1 
         candidates = [@candidates[idx]] if @candidates[idx]
       end
 
-      # ¹çÃ×¤¹¤ë¥â¥ó¥¹¥¿¡¼¤ò¸¡º÷
+      # åˆè‡´ã™ã‚‹ãƒ¢ãƒ³ã‚¹ã‚¿ãƒ¼ã‚’æ¤œç´¢
       candidates ||= spoiler.select_data(key)
 
       case
       when candidates.size > 10
-        send_notice(ch, "#{key}: ¸õÊä¤Î¿ô¤¬Â¿¤¹¤®¤Þ¤¹(#{candidates.size})".tojis)
+        send_notice(ch, "#{key}: å€™è£œã®æ•°ãŒå¤šã™ãŽã¾ã™(#{candidates.size})".tojis)
       when candidates.size > 1
         @candidates = candidates
         message = candidates.each_with_index.map { |mon, idx|
@@ -114,15 +104,15 @@ class MonspoBot < Nadoka::NDK_Bot
         }.join(" ")
         send_notice(ch, message.tojis)
       when candidates.empty?
-        send_notice(ch, "#{key}: ¸«¤Ä¤«¤ê¤Þ¤»¤ó".tojis)
+        send_notice(ch, "#{key}: è¦‹ã¤ã‹ã‚Šã¾ã›ã‚“".tojis)
       else
-        # Hit: ¾ðÊóÉ½¼¨
+        # Hit: æƒ…å ±è¡¨ç¤º
         mon = candidates.first
-        spoiler.get_data(mon[:num]).each do |i|
+        spoiler.get_data(mon[:num]).lines do |i|
           send_notice(ch, i.rstrip.tojis)
         end
         if (verbose)
-          spoiler.get_recall(mon[:num]).each do |i|
+          spoiler.get_recall(mon[:num]).lines do |i|
             send_notice("#{prefix.nick}", i.rstrip.tojis)
           end
         end

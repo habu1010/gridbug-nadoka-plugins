@@ -1,5 +1,4 @@
-# -*- coding: euc-jp -*-
-# -*- ruby -*-
+# -*-ruby; coding: utf-8 -*- vim:set ft=ruby:
 
 require 'shellwords'
 require 'kconv'
@@ -8,14 +7,15 @@ class MyRouletteBot < Nadoka::NDK_Bot
   def bot_initialize
     @available_channel = @bot_config[:ch] || /.*/
   end
-  
+
   def on_privmsg prefix, ch, msg
-    msg = msg.toeuc.gsub(/¡¡/e,'  ')
+    msg = msg.toutf8.gsub(/ã€€/, ' ')
+
     if @available_channel === ch
-      if /\Aroulette[>\s]\s*(.+)\s*/ =~ msg
-        send_notice(ch, "#{prefix.nick}: #{randomize($1)[0].tojis}")
+      if /\Aroulette[>\s]\s*(.+)\s*/u =~ msg
+        send_notice(ch, "#{prefix.nick}: #{randomize($1)[0]}".tojis)
       elsif /\Ashuffle[>\s]\s*(.+)\s*/ =~ msg
-        send_notice(ch, "#{prefix.nick}: #{ randomize($1).join(' ').tojis}")
+        send_notice(ch, "#{prefix.nick}: #{randomize($1).join(' ')}".tojis)
       elsif /\Arandom[>\s]\s*((\d+)|)/ =~ msg
         num = $2 ? $2.to_i : 1000
         send_notice(ch, "random bot: #{prefix.nick} -> #{rand num}")
@@ -24,8 +24,6 @@ class MyRouletteBot < Nadoka::NDK_Bot
   end
 
   def randomize msgs
-    res = Shellwords.shellwords(msgs.toeuc).sort_by{rand}
+    res = Shellwords.shellwords(msgs).sort_by{rand}
   end
 end
-
-

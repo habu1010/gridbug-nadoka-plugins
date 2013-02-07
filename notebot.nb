@@ -1,5 +1,4 @@
-# -*- coding: euc-jp -*-
-# -*-ruby-*-
+# -*-ruby; coding: utf-8 -*- vim:set ft=ruby:
 #
 # Copyright (c) 2004-2005 SASADA Koichi <ko1 at atdot.net>
 #
@@ -34,7 +33,7 @@ class NoteBot < Nadoka::NDK_Bot
   end
 
   def memorize(string)
-    if /^\s*(.+)\s+(?:§»§œ|is)\s+(.+)\s*$/ =~ string
+    if /^\s*(.+)\s+(?:„Å®„ÅØ|is)\s+(.+)\s*$/ =~ string
       key, value = $1, $2
       File.open(@@NOTE_FILE, "a") {|f|
         f.puts(key + " :#: " + value)
@@ -48,7 +47,7 @@ class NoteBot < Nadoka::NDK_Bot
 
   def forget(key)
     unless @note_hash[key]
-      return "#{key}: ≥–§®§∆§§§ﬁ§ª§Û"
+      return "#{key}: Ë¶ö„Åà„Å¶„ÅÑ„Åæ„Åõ„Çì"
     end
 
     File.open(@@NOTE_FILE, "w") {|f|
@@ -59,7 +58,7 @@ class NoteBot < Nadoka::NDK_Bot
     @note = File.readlines(@@NOTE_FILE)
     build_hash(@note)
 
-    return "#{key} §ÚÀ∫§Ï§ﬁ§∑§ø"
+    return "#{key} „ÇíÂøò„Çå„Åæ„Åó„Åü"
   end
 
   def sort
@@ -78,29 +77,29 @@ class NoteBot < Nadoka::NDK_Bot
 
   # Yes person
   def on_privmsg prefix, ch, msg
-    msg = msg.toeuc
+    msg = msg.toutf8
     if "note:sort" == msg
       sort
-      send_notice(ch, "•Ω°º•»§∑§ﬁ§∑§ø".tojis)
+      send_notice(ch, "„ÇΩ„Éº„Éà„Åó„Åæ„Åó„Åü".tojis)
     end
 
-    if /^(?:note|§–§∞)(?::(record|memorize|erase|forget))?[,>°¢\s]\s*(.*)\s*$/ie =~ msg
+    if /^(?:note|„Å∞„Åê)(?::(record|memorize|erase|forget))?[,>„ÄÅ\s]\s*(.*)\s*$/i =~ msg
       opt = $1
       key = $2
       case $1
       when "record", "memorize"
         if ret = memorize(key)
-          send_notice(ch, "#{ret} §Ú≥–§®§ﬁ§∑§ø".tojis)
+          send_notice(ch, "#{ret} „ÇíË¶ö„Åà„Åæ„Åó„Åü".tojis)
         end
       when "forget", "erase"
         send_notice(ch, forget(key).tojis)
       else
         if @note_hash[key]
           @note_hash[key].each{|i|
-            send_notice(ch, "#{key} §»§œ°ƒ#{i}".tojis)
+            send_notice(ch, "#{key} „Å®„ÅØ‚Ä¶#{i}".tojis)
           }
         else
-          send_notice(ch, "#{key} §»§œ≤ø§«§π§´°©".tojis)
+          send_notice(ch, "#{key} „Å®„ÅØ‰Ωï„Åß„Åô„ÅãÔºü".tojis)
         end
       end
     end

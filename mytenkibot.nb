@@ -1,4 +1,4 @@
-# -*-ruby-*-
+# -*-ruby; coding: utf-8 -*- vim:set ft=ruby:
 #
 # Copyright (c) 2004-2006 SASADA Koichi <ko1 at atdot.net>
 #
@@ -66,7 +66,7 @@ class MyTenkiBot < Nadoka::NDK_Bot
       if Net::HTTPOK === response
         response.body.each_line {|line|
           if /city title="(.+?)" id="(\d+)" source="http:\/\/weather.livedoor.com(.+?)"/ =~ line
-            @CityIDs[$1.toeuc] = $3
+            @CityIDs[$1.toutf8] = $3
           end
         }
       end
@@ -92,7 +92,7 @@ class MyTenkiBot < Nadoka::NDK_Bot
   def on_privmsg prefix, ch, msg
     if @available_channel === ch
       if /\Atenki(|:(.+?))[>\s](.+?)\s*(\d)?\s*$/ =~ msg
-        city = $3.strip.toeuc
+        city = $3.strip.toutf8
         timing = ($2 || 'today').strip
         days = $4.nil? ? 1 : $4.to_i
 

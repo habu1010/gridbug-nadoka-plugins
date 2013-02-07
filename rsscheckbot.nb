@@ -1,5 +1,4 @@
-# -*- coding: iso-2022-jp -*-
-# -*-ruby-*- vim: set filetype=ruby :
+# -*-ruby; coding: utf-8 -*- vim:set ft=ruby:
 
 require 'json'
 require 'net/http'
@@ -48,7 +47,9 @@ class RSSChecker
   def parse_response(response)
     return [] unless Net::HTTPOK === response
 
+    response.body.force_encoding(Encoding::UTF_8)
     feed = FeedParser::Feed.new(response.body)
+
     return feed.items.select {|i| i.date.to_i > @record["lastPubDate"]}
   end
 
@@ -98,7 +99,8 @@ class RSSCheckBot < Nadoka::NDK_Bot
   def notice(rss_name, items)
     items.each do |i|
       short_url = @google_url_shortener.shorten_url(i.link)
-      send_notice('#$B$0$j$C$I$P$0(B', "#{rss_name}: #{i.title} #{short_url}".tojis)
+      ch = "#ぐりっどばぐ".tojis.force_encoding(Encoding::ASCII_8BIT)
+      send_notice(ch, "#{rss_name}: #{i.title} #{short_url}".tojis)
     end
   end
 end

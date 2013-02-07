@@ -1,17 +1,11 @@
-# -*- coding: euc-jp -*-
-# -*- ruby -*-
-=begin
-
-This plugin is test version.
-
-=end
+# -*-ruby; coding: utf-8 -*- vim:set ft=ruby:
 
 require 'thread'
 require 'kconv'
 
 class TimerBot < Nadoka::NDK_Bot
   def on_privmsg prefix, ch, msg
-    msg = msg.toeuc.gsub(/°°/e,'  ')
+    msg = msg.toutf8.gsub(/„ÄÄ/,'  ')
     if /\Atimer[>\s]\s*(\w+)\s*(.+)?/ =~ msg
       msg = $2
       if $1 =~ /^(\d+)([smh])$/
@@ -28,10 +22,10 @@ class TimerBot < Nadoka::NDK_Bot
 
         if sec > 0
           Thread.start(sec, prefix.nick, msg) {|s, nick, m|
-            send_notice(ch, "#{nick}: •ø•§•ﬁ°º§Ú•π•ø°º•»§∑§ﬁ§∑§ø".tojis);
+            send_notice(ch, "#{nick}: „Çø„Ç§„Éû„Éº„Çí„Çπ„Çø„Éº„Éà„Åó„Åæ„Åó„Åü".tojis);
             sleep s
             if m.nil?
-              send_notice(ch, "#{nick}: #{s}…√∑–≤·".tojis);
+              send_notice(ch, "#{nick}: #{s}ÁßíÁµåÈÅé".tojis);
             else
               send_notice(ch, "#{nick}: #{m}".tojis);
             end

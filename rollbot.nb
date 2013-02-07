@@ -1,4 +1,4 @@
-## -*-ruby-*- vim: set filetype=ruby :
+# -*-ruby; coding: utf-8 -*- vim:set ft=ruby:
 
 require 'kconv'
 
@@ -15,7 +15,7 @@ class RollBot < Nadoka::NDK_Bot
       side = $2.to_i
       return if side == 0
       if (dice > @@MAX_DICE)
-        send_notice(ch, "#{prefix.nick}: $B<+J,$G?6$l$d%O%2(B".tojis)
+        send_notice(ch, "#{prefix.nick}: 振る回数が多すぎます".tojis)
         return
       end
       dice_array = []

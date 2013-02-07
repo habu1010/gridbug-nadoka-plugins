@@ -1,9 +1,4 @@
-# -*- ruby -*-
-=begin
-
-This plugin is test version.
-
-=end
+# -*-ruby; coding: utf-8 -*- vim:set ft=ruby:
 
 class CalcBot < Nadoka::NDK_Bot
   @@FUNCS = 'acos|asin|atan|atan2|acosh|asinh|atanh|cos|sin|tan|cosh|sinh|tanh|erf|erfc|exp|frexp|hypot|ldexp|log|log10|sqrt|E|PI'
@@ -11,7 +6,7 @@ class CalcBot < Nadoka::NDK_Bot
   def bot_initialize
     @available_channel = @bot_config[:ch] || /.*/
   end
-  
+
   def expectation(dice)
     if /^(\d*)d(\d+)$/ =~ dice
       dice = $1.empty? ? 1 : $1.to_i
@@ -26,12 +21,12 @@ class CalcBot < Nadoka::NDK_Bot
       exp = $1
       begin
         if /^([\s\d+\-*\/().]|#{@@FUNCS}|#{@@DICE})+$/ =~ exp
-          # ¥À¥¤¥¹¤ÎÉôÊ¬¤ò´üÂÔÃÍ¤ËÃÖ¤­ÊÑ¤¨
+          # ãƒ€ã‚¤ã‚¹ã®éƒ¨åˆ†ã‚’æœŸå¾…å€¤ã«ç½®ãå¤‰ãˆ
           exp2 = exp.gsub(/#{@@DICE}/) {|m| expectation(m)}
-          # ¿ô³Ø´Ø¿ô¤òMath::func()¤ËÃÖ¤­ÊÑ¤¨¤Æeval
+          # æ•°å­¦é–¢æ•°ã‚’Math::func()ã«ç½®ãå¤‰ãˆã¦eval
           result = eval exp2.gsub(/(#{@@FUNCS})/, "Math::\\1")
           if result.to_s.size > 200
-            send_notice(ch, "·×»»·ë²Ì¤¬Ä¹¤¹¤®¤Ş¤¹".tojis)
+            send_notice(ch, "è¨ˆç®—çµæœãŒé•·ã™ãã¾ã™".tojis)
           else
             send_notice(ch, "#{exp} = #{result.to_s}")
           end
@@ -42,5 +37,3 @@ class CalcBot < Nadoka::NDK_Bot
     end
   end
 end
-
-

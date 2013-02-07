@@ -1,6 +1,4 @@
-# -*- coding: iso-2022-jp -*-
-## -*-ruby-*- vim: set filetype=ruby :
-# -*- coding: iso-2022-jp -*-
+# -*-ruby; coding: utf-8 -*- vim:set ft=ruby:
 
 require 'date'
 require 'net/http'
@@ -43,7 +41,8 @@ class HengWikiUpdateCheckBot < Nadoka::NDK_Bot
         link = node.xpath('a').first
         url = @shortener.shorten_url(link["href"])
         content = link.content.tojis
-        send_notice('#$B$0$j$C$I$P$0(B', "Wiki update: #{content} #{url}")
+        ch = "#ぐりっどばぐ".tojis.force_encoding(Encoding::ASCII_8BIT)
+        send_notice(ch, "Wiki update: #{content} #{url}")
         newest_updated = time if time > newest_updated
       end
     end

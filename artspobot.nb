@@ -1,13 +1,13 @@
-# -*- coding: euc-jp -*-
+# -*-ruby; coding: utf-8 -*- vim:set ft=ruby:
 
 require 'kconv'
 require 'stringio'
 require 'singleton'
 
 class ArtspoBot < Nadoka::NDK_Bot
-  #BOT½é´ü²½
+  #BOTåˆæœŸåŒ–
   def bot_initialize
-    #¥Ç¡¼¥¿¥Ù¡¼¥¹¤«¤é¥¢¡¼¥Æ¥£¥Õ¥¡¥¯¥È¥Ç¡¼¥¿¤òÆÉ¤ß¹ş¤ß
+    #ãƒ‡ãƒ¼ã‚¿ãƒ™ãƒ¼ã‚¹ã‹ã‚‰ã‚¢ãƒ¼ãƒ†ã‚£ãƒ•ã‚¡ã‚¯ãƒˆãƒ‡ãƒ¼ã‚¿ã‚’èª­ã¿è¾¼ã¿
     @spoiler = {}
     @spoiler["h"] = ArtifactSpoiler.new(@bot_config[:heng_info_dir] + "/a_info.txt", @bot_config[:heng_info_dir] + "/k_info.txt")
     @spoiler["x"] = ArtifactSpoiler.new(@bot_config[:xang_info_dir] + "/a_info.txt", @bot_config[:xang_info_dir] + "/k_info.txt")
@@ -16,7 +16,7 @@ class ArtspoBot < Nadoka::NDK_Bot
   end
 
   def on_privmsg prefix, ch, msg
-    if /\Aart([x]?)(flag|:f)?[>\s]\s*(.+)\s*/e =~ msg.toeuc
+    if /\Aart([x]?)(flag|:f)?[>\s]\s*(.+)\s*/ =~ msg.toutf8
       variant = $1.length > 0 ? $1 : "h"
       spoiler = @spoiler[variant]
       key = $2 ? $2 : :full_name
@@ -28,7 +28,7 @@ class ArtspoBot < Nadoka::NDK_Bot
         send_notice(ch, "Artifact information has been updated.")
       end
 
-      # search_str ¤¬¿ôÃÍ¤Î¾ì¹ç¸õÊä¤«¤éÁªÂò
+      # search_str ãŒæ•°å€¤ã®å ´åˆå€™è£œã‹ã‚‰é¸æŠ
       if search_str =~ /^\d+$/ && @candidates[search_str.to_i - 1]
         hits = [@candidates[search_str.to_i - 1]]
       else
@@ -37,22 +37,27 @@ class ArtspoBot < Nadoka::NDK_Bot
 
       result = create_message(search_str, hits)
 
-      # Ä¹¤¹¤®¤ë¾ì¹ç¤ÏÆó¹Ô¤ËÊ¬¤±¤ë
-      pos = result.index('; ', 200)
-      result[pos + 1] = "\n" unless pos.nil?
+      # é•·ã™ãã‚‹å ´åˆã¯äºŒè¡Œã«åˆ†ã‘ã‚‹
+      pos = 0
+      while pos = result.index(';', pos + 1)
+        if result[0..pos].tojis.size > 350
+          result.insert(pos + 1, "\n")
+          break
+        end
+      end
 
-      # ¸¡º÷·ë²Ì¤òÉ½¼¨
-      result.each { |i| send_notice(ch, i.rstrip.tojis) }
+      # æ¤œç´¢çµæœã‚’è¡¨ç¤º
+      result.lines { |i| send_notice(ch, i.chomp.tojis) }
     end
   end
 
   def create_message(search_string, candidates)
     case
     when candidates.size > 10
-      "#{search_string}: ¸õÊä¤Î¿ô¤¬Â¿¤¹¤®¤Ş¤¹(#{candidates.size})"
+      "#{search_string}: å€™è£œã®æ•°ãŒå¤šã™ãã¾ã™(#{candidates.size})"
 
     when candidates.size > 1
-      # ³ºÅö¤¬2¡Á10¸Ä¤Î»ş¤Ï¸õÊä¤òÉ½¼¨
+      # è©²å½“ãŒ2ã€œ10å€‹ã®æ™‚ã¯å€™è£œã‚’è¡¨ç¤º
       @candidates = candidates
       candidates.each_with_index.collect { |art, idx|
         "(#{idx + 1})#{art[@search_key]}"
@@ -62,7 +67,7 @@ class ArtspoBot < Nadoka::NDK_Bot
       candidates[0].to_s @search_key
 
     else
-      "#{search_string}: ¸«¤Ä¤«¤ê¤Ş¤»¤ó"
+      "#{search_string}: è¦‹ã¤ã‹ã‚Šã¾ã›ã‚“"
 
     end
   end
@@ -84,17 +89,17 @@ class ArtifactFlagInfo
 
   private
   def ArtifactFlagInfo.initialize
-    @@type_array = []  # ¥Õ¥é¥°¤Î¥¿¥¤¥×('res' 'power'Åù)¤ò¼¨¤¹Ê¸»úÎó¤ÎÇÛÎó
+    @@type_array = []  # ãƒ•ãƒ©ã‚°ã®ã‚¿ã‚¤ãƒ—('res' 'power'ç­‰)ã‚’ç¤ºã™æ–‡å­—åˆ—ã®é…åˆ—
 
-    # ¥Õ¥é¥°¤ò¥­¡¼¤È¤·¤Æ¥Õ¥é¥°¤Î¥¿¥¤¥×¡¢É½¼¨½ç½ø¡¢É½¼¨Ì¾¤ò¼¨¤¹¥Ï¥Ã¥·¥å (ex. 'RES_ACID' => ['res', 0, '»À'])
+    # ãƒ•ãƒ©ã‚°ã‚’ã‚­ãƒ¼ã¨ã—ã¦ãƒ•ãƒ©ã‚°ã®ã‚¿ã‚¤ãƒ—ã€è¡¨ç¤ºé †åºã€è¡¨ç¤ºåã‚’ç¤ºã™ãƒãƒƒã‚·ãƒ¥ (ex. 'RES_ACID' => ['res', 0, 'é…¸'])
     @@flag_info = Hash.new
     order = 0
 
     flagtype_file = File.expand_path(File.dirname(__FILE__) + '/band-data/flagtype.txt')
     open(flagtype_file) { |f|
-      typename = nil # ¸½ºß½èÍıÃæ¤Î¥Õ¥é¥°¥¿¥¤¥×
+      typename = nil # ç¾åœ¨å‡¦ç†ä¸­ã®ãƒ•ãƒ©ã‚°ã‚¿ã‚¤ãƒ—
       f.each { |line|
-        case line
+        case line.toutf8
         when /^==TYPE:(.+)$/
           typename = $1.to_sym
           @@type_array << typename
@@ -116,7 +121,7 @@ class ArtifactActivateInfo < Hash
     open(activate_desc_source) do |file|
       key, constant, dice = nil, nil, nil
       file.each do |line|
-        case line
+        case line.toutf8
         when /"(\w+)"\s*,.*,.*,.*,\s*\{\s*(\d+)\s*,\s*(\d+)\s*\}/
           if self[$1.to_sym].nil?
             key, constant, dice = $1.to_sym, $2.to_i, $3.to_i
@@ -125,13 +130,13 @@ class ArtifactActivateInfo < Hash
           unless key.nil?
             self[key] = $1 + " : "
             if constant == 0 && dice == 0
-              self[key] += "¤¤¤Ä¤Ç¤â"
+              self[key] += "ã„ã¤ã§ã‚‚"
             elsif constant < 0
-              self[key] += "ÆÃ¼ì"
+              self[key] += "ç‰¹æ®Š"
             else
               self[key] += constant.to_s
               self[key] += "+d#{dice}" if dice > 0
-              self[key] += " ¥¿¡¼¥óËè"
+              self[key] += " ã‚¿ãƒ¼ãƒ³æ¯"
             end
           end
         else
@@ -144,16 +149,16 @@ end
 
 class Artifact < Hash
   INFO_ARRAY = [
-                [:slay, "¥¹¥ì¥¤: "],
-                [:brand, "Â°À­: "],
-                [:immun, "ÌÈ±Ö: "],
-                [:res, "ÂÑÀ­: "],
+                [:slay, "ã‚¹ãƒ¬ã‚¤: "],
+                [:brand, "å±æ€§: "],
+                [:immun, "å…ç–«: "],
+                [:res, "è€æ€§: "],
                 [:esp, "ESP: "],
-                [:sustain, "°İ»ı: "],
+                [:sustain, "ç¶­æŒ: "],
                 [:power, ""],
                 [:misc, ""],
                 [:curse, ""],
-                [:generate, "ÄÉ²Ã: "],
+                [:generate, "è¿½åŠ : "],
                ]
 
   def to_s(search_key)
@@ -162,9 +167,9 @@ class Artifact < Hash
     s.printf("[%d] ", self[:id])
 
     if (search_key == :full_name_en)
-      s.printf("%s (¡ú%s)", self[:full_name_en], self[:full_name])
+      s.printf("%s (â˜…%s)", self[:full_name_en], self[:full_name])
     else
-      s.printf("¡ú%s", self[:full_name])
+      s.printf("â˜…%s", self[:full_name])
     end
 
     output_data(s)
@@ -188,7 +193,7 @@ class Artifact < Hash
     self[:tval] >= 30 && self[:tval] <= 38
   end
 
-  # µİ¤ÎÇÜÎ¨É½¼¨
+  # å¼“ã®å€ç‡è¡¨ç¤º
   private
   def get_mult (sval, bonus)
     mult = sval % 10
@@ -196,7 +201,7 @@ class Artifact < Hash
     return mult
   end
 
-  # »¦Ù¤½¤Àµ¤ÎÉ½¼¨
+  # æ®ºæˆ®ä¿®æ­£ã®è¡¨ç¤º
   private
   def put_toHit_toDam (s)
     to_dam, to_hit = self[:to_dam], self[:to_hit]
@@ -210,7 +215,7 @@ class Artifact < Hash
     end
   end
 
-  # AC½¤Àµ¤ÎÉ½¼¨
+  # ACä¿®æ­£ã®è¡¨ç¤º
   private
   def put_ac(s)
     ac = self.fetch(:ac, 0)
@@ -234,21 +239,21 @@ class Artifact < Hash
     put_ac(s)
     s.print "; "
 
-    #½¤Àµ
+    #ä¿®æ­£
     s.printf("%+d %s", self[:pval], output_aux(self[:bonus])) if self[:bonus]
 
-    #¥Õ¥é¥°
+    #ãƒ•ãƒ©ã‚°
     INFO_ARRAY.each do |i|
       s.printf("%s%s", i[1], output_aux(self[i[0]])) if self[i[0]]
     end
 
-    #È¯Æ°
-    s.printf("È¯Æ°: %s; ", ArtifactActivateInfo.instance[self[:activate]]) if self[:activate]
+    #ç™ºå‹•
+    s.printf("ç™ºå‹•: %s; ", ArtifactActivateInfo.instance[self[:activate]]) if self[:activate]
 
-    s.printf("³¬ %d, ´õ¾¯ÅÙ %d, %.1f kg, $%d", self[:depth], self[:rarity], self[:weight] / 20.0, self[:value])
+    s.printf("éš %d, å¸Œå°‘åº¦ %d, %.1f kg, $%d", self[:depth], self[:rarity], self[:weight] / 20.0, self[:value])
   end
 
-  # ÂÑÀ­¡¢¥¹¥ì¥¤¡¢Ç½ÎÏ¤Ê¤É¤ÎÉ½¼¨
+  # è€æ€§ã€ã‚¹ãƒ¬ã‚¤ã€èƒ½åŠ›ãªã©ã®è¡¨ç¤º
   private
   def output_aux (value)
     value.collect { |i|
@@ -274,7 +279,7 @@ class ArtifactSpoiler
   end
 
   def search(regexp)
-    result_jp = @artifact_info.select {|i| i[:full_name] =~ /#{regexp}/ie}
+    result_jp = @artifact_info.select {|i| i[:full_name] =~ /#{regexp}/}
     result_en = @artifact_info.select {|i| i[:full_name_en] =~ /#{regexp}/i}
 
     return result_jp + result_en, result_en.empty? ? :full_name : :full_name_en
@@ -289,18 +294,18 @@ class ArtifactSpoiler
     @k_info_file_mtime = File.stat(@k_info_file).mtime
   end
 
-  #¥¢¥¤¥Æ¥à¤Î¼ïÎà¤òÆÉ¤ß¹ş¤à
-  # { ["tval", "sval"] => ["ÆüËÜ¸ìÌ¾", "±Ñ¸ìÌ¾"] } ¤È¤¤¤¦Ï¢ÁÛÇÛÎó¤¬ÆÀ¤é¤ì¤ë
+  #ã‚¢ã‚¤ãƒ†ãƒ ã®ç¨®é¡ã‚’èª­ã¿è¾¼ã‚€
+  # { ["tval", "sval"] => ["æ—¥æœ¬èªå", "è‹±èªå"] } ã¨ã„ã†é€£æƒ³é…åˆ—ãŒå¾—ã‚‰ã‚Œã‚‹
   private
   def self.read_k_info(k_info_file)
     item_names = {}
     open(k_info_file, "r") { |f|
       name, ename = "", ""
       f.each { |line|
-        case line
-        when /^N:(\d+):([^:]+)(:.+)?$/  #ÆüËÜ¸ìÌ¾
+        case line.toutf8
+        when /^N:(\d+):([^:]+)(:.+)?$/  # æ—¥æœ¬èªå
           name = $2.gsub(/& /,'').chomp
-        when /^[EJ]:([^:]+)(:.+)?$/        #±Ñ¸ìÌ¾
+        when /^[EJ]:([^:]+)(:.+)?$/        # è‹±èªå
           ename = $1.gsub(/(& |~)/,'').chomp
         when /^I:(\d+):(\d+):\d+$/
           item_names[[$1, $2]] = [name, ename]
@@ -311,14 +316,14 @@ class ArtifactSpoiler
     return item_names
   end
 
-  #¥¢¡¼¥Æ¥£¥Õ¥¡¥¯¥È¤Î¥Ç¡¼¥¿¤òÆÉ¤ß¹ş¤à
+  #ã‚¢ãƒ¼ãƒ†ã‚£ãƒ•ã‚¡ã‚¯ãƒˆã®ãƒ‡ãƒ¼ã‚¿ã‚’èª­ã¿è¾¼ã‚€
   private
   def init_a_info(a_info_file, item_names)
     flag_info = ArtifactFlagInfo.flag_info
     open(a_info_file, "r") { |f|
       cur_art = nil
       f.each { |line|
-        case line
+        case line.toutf8
         when /^N:(\d+):(.+)$/
           num, name = $1.to_i, $2
           cur_art = Artifact.new
@@ -337,7 +342,7 @@ class ArtifactSpoiler
           cur_art[:sval] = sval.to_i
           cur_art[:pval] = pval.to_i
           cur_art[:full_name] =
-            if cur_art[:name] =~ /^¡Ø/
+            if cur_art[:name] =~ /^ã€/
               item_names[[tval, sval]][0] + cur_art[:name]
             else
               cur_art[:name] + item_names[[tval, sval]][0]
@@ -373,15 +378,12 @@ class ArtifactSpoiler
             each do |i|
 
             type = flag_info[i][:type]
-            if cur_art[type].nil?
-              cur_art[type] = [i]
-            else
-              cur_art[type] << i
-            end
+            cur_art[type] ||= Array.new
+            cur_art[type] << i
 
           end
 
-          # ¢¨ÆÃ¼ì FULL_NAME ¥Õ¥é¥°¤¬¤¢¤Ã¤¿¤é¾ï¤Ë¥Õ¥ëÌ¾¾ÎÉ½¼¨
+          # â€»ç‰¹æ®Š FULL_NAME ãƒ•ãƒ©ã‚°ãŒã‚ã£ãŸã‚‰å¸¸ã«ãƒ•ãƒ«åç§°è¡¨ç¤º
           if cur_art[:full_name_flag]
             cur_art[:full_name] = cur_art[:name]
             cur_art[:full_name_en] = cur_art[:name_en]
@@ -390,10 +392,10 @@ class ArtifactSpoiler
       }
     }
 
-    # ¥¢¡¼¥Æ¥£¥Õ¥¡¥¯¥ÈÈÖ¹æ¤ò¸µ¤ËÇÛÎó¤òºî¤Ã¤Æ¤¤¤ë¤Î¤Ç¶õ¤­¤òÀÚ¤êµÍ¤á¤ë
+    # ã‚¢ãƒ¼ãƒ†ã‚£ãƒ•ã‚¡ã‚¯ãƒˆç•ªå·ã‚’å…ƒã«é…åˆ—ã‚’ä½œã£ã¦ã„ã‚‹ã®ã§ç©ºãã‚’åˆ‡ã‚Šè©°ã‚ã‚‹
     @artifact_info.compact!
 
-    # ¥Õ¥é¥°¤Î½çÈÖ¤ò¥½¡¼¥È
+    # ãƒ•ãƒ©ã‚°ã®é †ç•ªã‚’ã‚½ãƒ¼ãƒˆ
     @artifact_info.each do |i|
       ArtifactFlagInfo.type_array.each do |j|
         unless i[j].nil?

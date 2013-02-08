@@ -37,13 +37,17 @@ class ArtspoBot < Nadoka::NDK_Bot
 
       result = create_message(search_str, hits)
 
-      # 長すぎる場合は二行に分ける
-      pos = 0
-      while pos = result.index(';', pos + 1)
-        if result[0..pos].tojis.size > 350
-          result.insert(pos + 1, "\n")
-          break
+      # 長すぎる場合は複数行に分ける
+      start = 0
+      line_length_byte = 0
+      while pos = result.index(';', start)
+        pos += 1
+        line_length_byte += result[start..pos].tojis.size
+        if line_length_byte > 350
+          result.insert(start, "\n")
+          line_length_byte = 0
         end
+        start = pos
       end
 
       # 検索結果を表示

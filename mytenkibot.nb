@@ -110,11 +110,11 @@ class MyTenkiBot < Nadoka::NDK_Bot
             send_notice ch, "#{result[i][0].tojis}"
           }
         rescue IndexError
-          result = "#{city.tojis} is unknown city.  Check http://weather.livedoor.com/weather_hacks/rss_feed_list.html"
-          send_notice ch, "tenki bot: #{result}" 
+          result = "#{city} is unknown city.  Check http://weather.livedoor.com/weather_hacks/rss_feed_list.html"
+          send_notice ch, "tenki bot: #{result}".tojis
         rescue => e
           result = "#{e}"
-          send_notice ch, "tenki bot: #{result}" 
+          send_notice ch, "tenki bot: #{result}".tojis
         end
       end
     end

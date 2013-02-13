@@ -40,9 +40,9 @@ class HengWikiUpdateCheckBot < Nadoka::NDK_Bot
       if time > @last_updated
         link = node.xpath('a').first
         url = @shortener.shorten_url(link["href"])
-        content = link.content.tojis
+        content = link.content
         ch = "#ぐりっどばぐ".tojis.force_encoding(Encoding::ASCII_8BIT)
-        send_notice(ch, "Wiki update: #{content} #{url}")
+        send_notice(ch, "Wiki update: #{content} #{url}".tojis)
         newest_updated = time if time > newest_updated
       end
     end

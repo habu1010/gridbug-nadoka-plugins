@@ -7,6 +7,7 @@ require 'kconv'
 require File.expand_path(File.dirname(__FILE__) + '/googleurlshortener.rb')
 
 class HengWikiUpdateCheckBot < Nadoka::NDK_Bot
+  NEW_ITEMS_NUM_MAX = 5
 
   def bot_initialize
     @next_check_time = Time.now
@@ -33,7 +34,7 @@ class HengWikiUpdateCheckBot < Nadoka::NDK_Bot
 
     newest_updated = @last_updated
 
-    doc.xpath('//ul[@class = "list1"]/li').each do |node|
+    doc.xpath('//ul[@class = "list1"]/li').first(NEW_ITEMS_NUM_MAX).each do |node|
       time_str = node.children.first.content.gsub(/\(.+\)/, "") + "JST"
       time = DateTime.strptime(time_str, "%Y-%m-%d  %H:%M:%S - %Z")
 

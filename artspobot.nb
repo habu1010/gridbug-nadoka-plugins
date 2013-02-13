@@ -165,18 +165,19 @@ class ArtifactActivateInfo < Hash
 end
 
 class Artifact < Hash
-  INFO_ARRAY = [
-                [:slay, "スレイ: "],
-                [:brand, "属性: "],
-                [:immun, "免疫: "],
-                [:res, "耐性: "],
-                [:esp, "ESP: "],
-                [:sustain, "維持: "],
-                [:power, ""],
-                [:misc, ""],
-                [:curse, ""],
-                [:generate, "追加: "],
-               ]
+  @@INFO_ARRAY =
+    [
+     [:slay, "スレイ: "],
+     [:brand, "属性: "],
+     [:immun, "免疫: "],
+     [:res, "耐性: "],
+     [:esp, "ESP: "],
+     [:sustain, "維持: "],
+     [:power, ""],
+     [:misc, ""],
+     [:curse, ""],
+     [:generate, "追加: "],
+    ]
 
   def to_s(search_key)
     s = StringIO.new
@@ -260,7 +261,7 @@ class Artifact < Hash
     s.printf("%+d %s", self[:pval], output_aux(self[:bonus])) if self[:bonus]
 
     #フラグ
-    INFO_ARRAY.each do |i|
+    @@INFO_ARRAY.each do |i|
       s.printf("%s%s", i[1], output_aux(self[i[0]])) if self[i[0]]
     end
 

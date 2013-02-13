@@ -7,7 +7,7 @@ require 'kconv'
 require File.expand_path(File.dirname(__FILE__) + '/googleurlshortener.rb')
 
 class RSSChecker
-  RECORD_DIR = "#{ENV["HOME"]}/.rss_checker"
+  @@RECORD_DIR = "#{ENV["HOME"]}/.rss_checker"
 
   attr_reader :name
   #attr_accessor :record
@@ -19,7 +19,7 @@ class RSSChecker
     uri = URI.parse(url)
     @http = Net::HTTP.new(uri.host)
     @request = Net::HTTP::Get.new("#{uri.path}?#{uri.query}")
-    @record_file = RECORD_DIR + "/" + name
+    @record_file = @@RECORD_DIR + "/" + name
 
     begin
       File.open(@record_file) do |f|
@@ -27,7 +27,7 @@ class RSSChecker
       end
     rescue
       # 'File not found?'
-      FileUtils.mkdir(RECORD_DIR) unless FileTest.exist?(RECORD_DIR)
+      FileUtils.mkdir(@@RECORD_DIR) unless FileTest.exist?(@@RECORD_DIR)
       @record = {"If-Modified-Since" => "", "lastPubDate" => Time.now.to_i}
     end
   end

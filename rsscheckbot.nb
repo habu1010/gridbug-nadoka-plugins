@@ -7,7 +7,7 @@ require 'kconv'
 require File.expand_path(File.dirname(__FILE__) + '/googleurlshortener.rb')
 
 class RSSChecker
-  @@RECORD_DIR = "#{ENV["HOME"]}/.rss_checker"
+  @@RECORD_DIR = File.expand_path("~/.rss_checker")
 
   attr_reader :name
   #attr_accessor :record

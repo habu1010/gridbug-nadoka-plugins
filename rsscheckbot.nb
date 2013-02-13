@@ -12,8 +12,9 @@ class RSSChecker
   attr_reader :name
   #attr_accessor :record
 
-  def initialize(name, url)
+  def initialize(name, url, new_items_num_max)
     @name = name
+    @new_items_num_max = new_items_num_max
 
     uri = URI.parse(url)
     @http = Net::HTTP.new(uri.host)
@@ -40,7 +41,7 @@ class RSSChecker
 
     new_items = parse_response(response)
     update_record(response, new_items.first.date.to_i) unless new_items.empty?
-    return new_items
+    return new_items.first(@new_items_num_max)
   end
 
   private
@@ -78,7 +79,7 @@ class RSSCheckBot < Nadoka::NDK_Bot
   def bot_initialize
     @next_check_time = Time.now
 
-    @rss_checker_list = @bot_config[:rss_list].map {|i| RSSChecker.new(i[:name], i[:url])}
+    @rss_checker_list = @bot_config[:rss_list].map {|i| RSSChecker.new(i[:name], i[:url], i[:max])}
     @google_url_shortener = GoogleURLShortener.new
   end
 

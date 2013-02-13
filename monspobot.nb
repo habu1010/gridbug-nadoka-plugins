@@ -1,9 +1,12 @@
 # -*-ruby; coding: utf-8 -*- vim:set ft=ruby:
 
+require 'fuzzystringmatch'
+
 class MonsterSpoiler
   def initialize(spo_file)
     @table = []
     @SPO_FILE = spo_file
+    @jarow = FuzzyStringMatch::JaroWinkler.create(:pure)
     File.open(@SPO_FILE) do |f|
       namepos = nil
       name_lines = []
@@ -47,7 +50,6 @@ class MonsterSpoiler
       name_length = mon[:recallpos] - mon[:namepos]
       f.read(name_length).toutf8
     }.gsub("\n", ' ')
-#.map { |i| i.chomp }.join(" ")
   end
 
   def get_recall(num)
@@ -67,6 +69,36 @@ class MonsterSpoiler
     end
 
     return recall_lines
+  end
+
+  def get_fuzzy_match(search_key)
+    search_key_list = [search_key, search_key.tr("ぁ-ん", "ァ-ン"), search_key.tr("ァ-ン", "ぁ-ん")].uniq
+    @table.map { |i|
+      jp_scores = get_scores(search_key_list, i[:name])
+
+      # ユニークモンスターは名前のみでもスコアを計算する
+      match = i[:name].match(/『(.+)』/)
+      jp_scores += get_scores(search_key_list, match[0]) if match
+
+      {
+        mon: i,
+        score_jp: jp_scores.max,
+        score_en: @jarow.getDistance(search_key.downcase, i[:ename].downcase),
+      }
+    }.each { |i|
+      i[:score_max] = [i[:score_jp], i[:score_en]].max
+    }.sort_by { |i| i[:score_max] }.reverse.take(10).select { |i|
+      i[:score_max] >= 0.5
+    }.map { |i|
+      name = i[:score_jp] >= i[:score_en] ? :name : :ename
+      mon = i[:mon]
+      { :name => mon[name], :num => mon[:num] }
+    }
+  end
+
+  private
+  def get_scores(search_key_list, target_name)
+    search_key_list.map { |i| @jarow.getDistance(i, target_name) }
   end
 end
 
@@ -99,12 +131,15 @@ class MonspoBot < Nadoka::NDK_Bot
         send_notice(ch, "#{key}: 候補の数が多すぎます(#{candidates.size})".tojis)
       when candidates.size > 1
         @candidates = candidates
-        message = candidates.each_with_index.map { |mon, idx|
-          "(#{idx + 1})#{mon[:name]}"
-        }.join(" ")
-        send_notice(ch, message.tojis)
+        send_notice(ch, create_candidates_message.tojis)
       when candidates.empty?
-        send_notice(ch, "#{key}: 見つかりません".tojis)
+        fuzzy_match_candidates = spoiler.get_fuzzy_match(key)
+        if fuzzy_match_candidates.empty?
+          send_notice(ch, "#{key}: 見つかりません".tojis)
+        else
+          @candidates = fuzzy_match_candidates
+          send_notice(ch, "#{key}: もしかして: #{create_candidates_message}".tojis)
+        end
       else
         # Hit: 情報表示
         mon = candidates.first
@@ -120,4 +155,10 @@ class MonspoBot < Nadoka::NDK_Bot
     end
   end
 
+  private
+  def create_candidates_message
+    @candidates.each_with_index.map { |mon, idx|
+      "(#{idx + 1})#{mon[:name]}"
+    }.join(" ")
+  end
 end

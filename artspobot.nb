@@ -3,6 +3,7 @@
 require 'kconv'
 require 'stringio'
 require 'singleton'
+require 'fuzzystringmatch'
 
 class ArtspoBot < Nadoka::NDK_Bot
   #BOT初期化
@@ -35,7 +36,9 @@ class ArtspoBot < Nadoka::NDK_Bot
         hits, @search_key = spoiler.search(search_str)
       end
 
-      result = create_message(search_str, hits)
+      fuzzy_hits, @search_key = spoiler.fuzzy_search(search_str) if hits.empty?
+
+      result = create_message(search_str, hits, fuzzy_hits)
 
       # 長すぎる場合は複数行に分ける
       start = 0
@@ -55,7 +58,8 @@ class ArtspoBot < Nadoka::NDK_Bot
     end
   end
 
-  def create_message(search_string, candidates)
+  private
+  def create_message(search_string, candidates, fuzzy_candidates)
     case
     when candidates.size > 10
       "#{search_string}: 候補の数が多すぎます(#{candidates.size})"
@@ -63,17 +67,26 @@ class ArtspoBot < Nadoka::NDK_Bot
     when candidates.size > 1
       # 該当が2〜10個の時は候補を表示
       @candidates = candidates
-      candidates.each_with_index.collect { |art, idx|
-        "(#{idx + 1})#{art[@search_key]}"
-      }.join(" ")
+      create_candidates_message
 
     when candidates.size == 1
       candidates[0].to_s @search_key
 
-    else
+    when fuzzy_candidates.empty?
       "#{search_string}: 見つかりません"
 
+    else
+      @candidates = fuzzy_candidates
+      "#{search_string}: もしかして: #{create_candidates_message}"
+
     end
+  end
+
+  private
+  def create_candidates_message
+    @candidates.each_with_index.collect { |art, idx|
+      "(#{idx + 1})#{art[@search_key]}"
+    }.join(" ")
   end
 
 end
@@ -274,6 +287,8 @@ class ArtifactSpoiler
     @a_info_file = a_info_file
     @k_info_file = k_info_file
 
+    @jarow = FuzzyStringMatch::JaroWinkler.create(:pure)
+
     read_artifact_info
   end
 
@@ -289,6 +304,27 @@ class ArtifactSpoiler
     return result_jp + result_en, result_en.empty? ? :full_name : :full_name_en
   end
 
+  def fuzzy_search(search_key)
+    search_key_list = [search_key, search_key.tr("ぁ-ん", "ァ-ン"), search_key.tr("ァ-ン", "ぁ-ん")].uniq
+    candidates = @artifact_info.map { |i|
+      jp_scores = get_scores(search_key_list, i[:name])
+
+      {
+        art: i,
+        score_jp: jp_scores.max,
+        score_en: @jarow.getDistance(search_key.downcase, i[:name_en].downcase),
+      }
+    }.each { |i|
+      i[:score_max] = [i[:score_jp], i[:score_en]].max
+    }.sort_by { |i| i[:score_max] }.reverse.take(10).select { |i|
+      i[:score_max] >= 0.55
+    }
+
+    searched_key = candidates.select { |i| i[:score_jp] < i[:score_en] }.empty? ? :full_name : :full_name_en
+
+    [candidates.map { |i| i[:art] }, searched_key]
+  end
+
   def read_artifact_info
     @artifact_info.clear
 
@@ -296,6 +332,11 @@ class ArtifactSpoiler
     init_a_info(@a_info_file, item_names)
     @a_info_file_mtime = File.stat(@a_info_file).mtime
     @k_info_file_mtime = File.stat(@k_info_file).mtime
+  end
+
+  private
+  def get_scores(search_key_list, target_name)
+    search_key_list.map { |i| @jarow.getDistance(i, target_name) }
   end
 
   #アイテムの種類を読み込む

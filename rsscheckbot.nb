@@ -40,7 +40,7 @@ class RSSChecker
     end
 
     new_items = parse_response(response)
-    update_record(response, new_items.first.date.to_i) unless new_items.empty?
+    update_record(response, new_items.first.last_pubdate) unless new_items.empty?
     return new_items.first(@new_items_num_max)
   end
 
@@ -51,7 +51,16 @@ class RSSChecker
     response.body.force_encoding(Encoding::UTF_8)
     feed = FeedParser::Feed.new(response.body)
 
-    return feed.items.select {|i| i.date.to_i > @record["lastPubDate"]}
+    feed.items.each { |i| self.class.add_last_pubdate_to(i) }
+
+    return feed.items.select {|i| i.last_pubdate > @record["lastPubDate"]}
+  end
+
+  private
+  def self.add_last_pubdate_to(item)
+    def item.last_pubdate
+      self.date.to_i
+    end
   end
 
   private
@@ -61,6 +70,16 @@ class RSSChecker
     File.open(@record_file, "w") {|f|
       f.write @record.to_json
     }
+  end
+end
+
+# pukiwikiが発行するRSSは、なぜか更新日時がdescriptionタグに含まれるためそれ専用のサブクラス
+class PukiWikiRSSChecker < RSSChecker
+  private
+  def self.add_last_pubdate_to(item)
+    def item.last_pubdate
+      Time.parse(self.content.gsub(/<.*?>/, "")).to_i
+    end
   end
 end
 
@@ -79,7 +98,10 @@ class RSSCheckBot < Nadoka::NDK_Bot
   def bot_initialize
     @next_check_time = Time.now
 
-    @rss_checker_list = @bot_config[:rss_list].map {|i| RSSChecker.new(i[:name], i[:url], i[:max])}
+    @rss_checker_list = @bot_config[:rss_list].map do |i|
+      checker = Object.const_get(i.fetch(:checker, "RSSChecker"))
+      checker.new(i[:name], i[:url], i[:max])
+    end
     @google_url_shortener = GoogleURLShortener.new
   end
 

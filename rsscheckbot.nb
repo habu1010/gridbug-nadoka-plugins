@@ -98,6 +98,7 @@ class RSSCheckBot < Nadoka::NDK_Bot
   def bot_initialize
     @next_check_time = Time.now
 
+    @notice_ch = @bot_config[:ch].tojis.force_encoding(Encoding::ASCII_8BIT)
     @rss_checker_list = @bot_config[:rss_list].map do |i|
       checker = Object.const_get(i.fetch(:checker, "RSSChecker"))
       checker.new(i[:name], i[:url], i[:max])
@@ -122,8 +123,7 @@ class RSSCheckBot < Nadoka::NDK_Bot
   def notice(rss_name, items)
     items.each do |i|
       short_url = @google_url_shortener.shorten_url(i.link)
-      ch = "#ぐりっどばぐ".tojis.force_encoding(Encoding::ASCII_8BIT)
-      send_notice(ch, "#{rss_name}: #{i.title} #{short_url}".tojis)
+      send_notice(@notice_ch, "#{rss_name}: #{i.title} #{short_url}".tojis)
     end
   end
 end

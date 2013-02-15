@@ -83,6 +83,16 @@ class PukiWikiRSSChecker < RSSChecker
   end
 end
 
+class SourceForgeCommitRSSChecker < RSSChecker
+  private
+  def self.add_last_pubdate_to(item)
+    def item.last_pubdate
+      m = self.content.match(/Commit: (\d+)/)
+      m[1].to_i
+    end
+  end
+end
+
 if __FILE__ == $0
   a = RSSChecker.new('hoge', "http://search.twitter.com/search.atom?q=%23hengband")
   #a = RSSChecker.new('hoge', "http://sourceforge.jp/forum/rss.php?group_id=541&forum_id=30152")

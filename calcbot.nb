@@ -24,15 +24,15 @@ class CalcBot < Nadoka::NDK_Bot
 
   private
   def calc_formula(formula)
-    eval_formula = formula.clone
+    formula = formula.clone
     # ダイスの部分を期待値に置き変え
-    eval_formula = eval_formula.gsub(/#{@@DICE}/) {|m| dice_expectation(m)}
+    formula.gsub!(/#{@@DICE}/) {|m| dice_expectation(m)}
     # 数学関数をMath::func()に置き変え
-    eval_formula = eval_formula.gsub(/(#{@@FUNCS})/, "Math::\\1")
+    formula.gsub!(/(#{@@FUNCS})/, "Math::\\1")
 
     result = Thread.new {
       $SAFE = 4
-      eval eval_formula
+      eval formula
     }.value.to_s
 
     raise "calculation result is too long." if result.size > 200

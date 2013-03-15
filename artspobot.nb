@@ -12,12 +12,13 @@ class ArtspoBot < Nadoka::NDK_Bot
     @spoiler = {}
     @spoiler["h"] = ArtifactSpoiler.new(@bot_config[:heng_info_dir] + "/a_info.txt", @bot_config[:heng_info_dir] + "/k_info.txt")
     @spoiler["x"] = ArtifactSpoiler.new(@bot_config[:xang_info_dir] + "/a_info.txt", @bot_config[:xang_info_dir] + "/k_info.txt")
+    @spoiler["t"] = ArtifactSpoiler.new(@bot_config[:tang_info_dir] + "/a_info.txt", @bot_config[:tang_info_dir] + "/k_info.txt")
     @candidates = []
     @search_key = :full_name
   end
 
   def on_privmsg prefix, ch, msg
-    if /\Aart([x]?)(flag|:f)?[>\s]\s*(.+)\s*/ =~ msg.toutf8
+    if /\Aart([tx]?)(flag|:f)?[>\s]\s*(.+)\s*/ =~ msg.toutf8
       variant = $1.length > 0 ? $1 : "h"
       spoiler = @spoiler[variant]
       key = $2 ? $2 : :full_name
@@ -313,7 +314,7 @@ class ArtifactSpoiler
       {
         art: i,
         score_jp: jp_scores.max,
-        score_en: @jarow.getDistance(search_key.downcase, i[:name_en].downcase),
+        score_en: i[:name_en].nil? ? 0 : @jarow.getDistance(search_key.downcase, i[:name_en].downcase),
       }
     }.each { |i|
       i[:score_max] = [i[:score_jp], i[:score_en]].max

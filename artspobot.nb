@@ -10,9 +10,9 @@ class ArtspoBot < Nadoka::NDK_Bot
   def bot_initialize
     #データベースからアーティファクトデータを読み込み
     @spoiler = {}
-    @spoiler["h"] = ArtifactSpoiler.new(@bot_config[:heng_info_dir] + "/a_info.txt", @bot_config[:heng_info_dir] + "/k_info.txt")
-    @spoiler["x"] = ArtifactSpoiler.new(@bot_config[:xang_info_dir] + "/a_info.txt", @bot_config[:xang_info_dir] + "/k_info.txt")
-    @spoiler["t"] = ArtifactSpoiler.new(@bot_config[:tang_info_dir] + "/a_info.txt", @bot_config[:tang_info_dir] + "/k_info.txt")
+    @spoiler["h"] = ArtifactSpoiler.new(@bot_config[:heng_info_dir] + "/a_info.txt", @bot_config[:heng_info_dir] + "/k_info.txt", File.expand_path(File.dirname(__FILE__) + '/band-data/tables.c'))
+    @spoiler["x"] = ArtifactSpoiler.new(@bot_config[:xang_info_dir] + "/a_info.txt", @bot_config[:xang_info_dir] + "/k_info.txt", nil)
+    @spoiler["t"] = ArtifactSpoiler.new(@bot_config[:tang_info_dir] + "/a_info.txt", @bot_config[:tang_info_dir] + "/k_info.txt", File.expand_path(File.dirname(__FILE__) + '/band-data/tiny-tables.c'))
     @candidates = []
     @search_key = :full_name
   end
@@ -131,12 +131,10 @@ class ArtifactFlagInfo
   end
 end
 
-class ArtifactActivateInfo < Hash
-  include Singleton
+class ActivationInfo < Hash
 
-  def initialize
-    activate_desc_source = File.expand_path(File.dirname(__FILE__) + '/band-data/tables.c')
-    open(activate_desc_source) do |file|
+  def initialize(source)
+    open(source) do |file|
       key, constant, dice = nil, nil, nil
       file.each do |line|
         case line.toutf8
@@ -267,7 +265,7 @@ class Artifact < Hash
     end
 
     #発動
-    s.printf("発動: %s; ", ArtifactActivateInfo.instance[self[:activate]]) if self[:activate]
+    s.printf("発動: %s; ", self[:activate]) if self[:activate]
 
     s.printf("階 %d, 希少度 %d, %.1f kg, $%d", self[:depth], self[:rarity], self[:weight] / 20.0, self[:value])
   end
@@ -283,11 +281,12 @@ end
 
 class ArtifactSpoiler
 
-  def initialize(a_info_file, k_info_file)
+  def initialize(a_info_file, k_info_file, activation_info_file)
     @artifact_info = []
 
     @a_info_file = a_info_file
     @k_info_file = k_info_file
+    @activation_info_file = activation_info_file
 
     @jarow = FuzzyStringMatch::JaroWinkler.create(:pure)
 
@@ -330,8 +329,9 @@ class ArtifactSpoiler
   def read_artifact_info
     @artifact_info.clear
 
+    activation_info = @activation_info_file ? ActivationInfo.new(@activation_info_file) : Hash.new
     item_names = ArtifactSpoiler.read_k_info(@k_info_file)
-    init_a_info(@a_info_file, item_names)
+    init_a_info(@a_info_file, item_names, activation_info)
     @a_info_file_mtime = File.stat(@a_info_file).mtime
     @k_info_file_mtime = File.stat(@k_info_file).mtime
   end
@@ -365,7 +365,7 @@ class ArtifactSpoiler
 
   #アーティファクトのデータを読み込む
   private
-  def init_a_info(a_info_file, item_names)
+  def init_a_info(a_info_file, item_names, activation_info)
     flag_info = ArtifactFlagInfo.flag_info
     open(a_info_file, "r") { |f|
       cur_art = nil
@@ -416,7 +416,7 @@ class ArtifactSpoiler
           cur_art[:to_dam] = $5.to_i
           cur_art[:to_ac] = $6.to_i
         when /^U:(.+)$/
-          cur_art[:activate] = $1.to_sym
+          cur_art[:activate] = activation_info[$1.to_sym]
         when /^F:(.*)$/
           $1.split('|').
             map {|i| i.strip}.reject {|i| i.empty?}.

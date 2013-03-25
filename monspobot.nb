@@ -108,11 +108,12 @@ class MonspoBot < Nadoka::NDK_Bot
     @spoiler = {}
     @spoiler["h"] = MonsterSpoiler.new(File.expand_path(File.dirname(__FILE__) + '/band-data/heng-mon-info.spo'))
     @spoiler["x"] = MonsterSpoiler.new(File.expand_path(File.dirname(__FILE__) + '/band-data/xang-mon-info.spo'))
+    @spoiler["t"] = MonsterSpoiler.new(File.expand_path(File.dirname(__FILE__) + '/band-data/tang-mon-info.spo'))
     @candidates = []
   end
 
   def on_privmsg prefix, ch, msg
-    if /\Amon([x]?)(:v)?[>\s]\s*(.+)\s*/i =~ msg.toutf8
+    if /\Amon([tx]?)(:v)?[>\s]\s*(.+)\s*/i =~ msg.toutf8
       spoiler = $1.empty? ? @spoiler["h"] : @spoiler[$1]
       verbose = $2
       key = $3

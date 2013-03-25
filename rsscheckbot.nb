@@ -1,7 +1,7 @@
 # -*-ruby; coding: utf-8 -*- vim:set ft=ruby:
 
 require 'json'
-require 'net/http'
+require 'net/https'
 require 'feedparser'
 require 'kconv'
 require File.expand_path(File.dirname(__FILE__) + '/googleurlshortener.rb')
@@ -17,7 +17,12 @@ class RSSChecker
     @new_items_num_max = new_items_num_max
 
     uri = URI.parse(url)
-    @http = Net::HTTP.new(uri.host)
+    @http = Net::HTTP.new(uri.host, uri.port)
+    if uri.scheme == "https"
+      @http.use_ssl = true
+      @http.verify_mode = OpenSSL::SSL::VERIFY_NONE
+    end
+
     @request = Net::HTTP::Get.new("#{uri.path}?#{uri.query}")
     @record_file = @@RECORD_DIR + "/" + name
 
